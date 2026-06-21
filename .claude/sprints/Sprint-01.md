@@ -103,19 +103,32 @@ Stand up the full monorepo skeleton: a working FastAPI backend with a health-che
 ### Sprint 1 Handoff Notes
 
 **What was built:**
-- [fill in]
+- Monorepo root with `frontend/`, `backend/`, `tests/`, `docs/`, `docker-compose.yml`, `nginx.conf`, `README.md`
+- Backend FastAPI app with `/health` endpoint returning `{"status": "ok", "db": "<connected|disconnected>"}` 
+- Backend core modules: `core/config.py` (Settings class), `core/database.py` (Motor + Beanie init with empty `document_models=[]`)
+- Backend module stubs at `backend/modules/` with empty `__init__.py`: auth, users, expenses, income, groups, budgets, analytics, notifications, websocket
+- Backend Dockerfile (python:3.11-slim) + docker-compose.yml (single `backend` service on port 8000)
+- Frontend Next.js 14 app with Tailwind, shadcn/ui initialized, placeholder landing page showing "FinTrack" heading
+- Frontend API client stub at `lib/api/client.ts` with fetch wrapper (TODO comment for Sprint 3 auth interceptor)
+- Playwright setup in `tests/` as separate npm package with `smoke.spec.ts` verifying homepage loads
+- All code pushed to GitHub repo
 
 **Decisions made (not already in TRD.md):**
-- [e.g., "Playwright tests live in /tests at monorepo root, run via `npx playwright test` from root"]
+- Playwright tests live in `/tests` as a separate npm package (has its own `package.json`), run via `cd tests && npx playwright test` from monorepo root
+- Frontend placeholder uses dark-mode compatible zinc gradient background with centered content
+- CORS origins parsed via comma-split string property `cors_origins_list` in Settings class
+- Database name in use: `Fintrack` (capitalized, per `.env.example`)
+- Health endpoint always returns HTTP 200 even if DB disconnected (per spec note about liveness vs readiness probing)
 
 **Known issues / deferred items:**
-- [fill in, or "None"]
+- Docker build/run not fully tested locally (port conflict during verification) — recommend testing on clean environment before Sprint 10 deploy
+- Playwright config had several issues fixed during handoff (wrong testDir path, extra browser projects, commented baseURL, wrong webServer command)
 
 **What Sprint 2 needs to know:**
-- Backend module folder structure is at `backend/modules/` with empty `__init__.py` files
-  for: auth, users, expenses, income, groups, budgets, analytics, notifications, websocket
-- `core/config.py` Settings class is ready to extend with new env vars as needed
-- `core/database.py` has an empty `document_models=[]` — Sprint 2 must add User/OTP/
-  RefreshToken Beanie models to this list
-- MongoDB database name in use: `fintrack`
+- Module folder structure ready at `backend/modules/{auth,users,expenses,income,groups,budgets,analytics,notifications,websocket}/` each with empty `__init__.py`
+- Add User/OTP/RefreshToken Beanie Document models to `backend/core/database.py`'s `document_models` list (currently empty array)
+- Import settings via `from core.config import settings` — attributes are lowercase snake_case matching env var names
+- MongoDB connection is async via Motor; database object accessed via `database.motor_client[settings.mongodb_db_name]`
+- JWT config available: `settings.jwt_secret`, `settings.jwt_access_ttl_minutes` (default 15), `settings.jwt_refresh_ttl_days` (default 7)
+- Email config available: `settings.gmail_user`, `settings.gmail_app_password` (for SMTP)
 ```
