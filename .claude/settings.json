@@ -1,0 +1,25 @@
+{
+    "env": {
+        "ANTHROPIC_API_KEY": "sk-ws-H.IYLMPM.sPZg.MEUCIAKBw-ujEmX2S62l6jRUhVuI7yRQsolqNy9OcRzAqj-KAiEAwzMdJanSYD75g_rO402U2FiTksPgL1MoRJyG45ZuCh4",
+        "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.IYLMPM.sPZg.MEUCIAKBw-ujEmX2S62l6jRUhVuI7yRQsolqNy9OcRzAqj-KAiEAwzMdJanSYD75g_rO402U2FiTksPgL1MoRJyG45ZuCh4",
+        "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
+        "ANTHROPIC_MODEL": "qwen3.6-35b-a3b",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.6-35b-a3b",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.6-35b-a3b",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.6-35b-a3b",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3.6-35b-a3b"
+    },
+    "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "postman@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official":true,
+    "session-report@claude-plugins-official":true,
+    "pyright-lsp@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official":true,
+    "code-review@claude-plugins-official":true,
+    "claude-md-management@claude-plugins-official":true,
+    "feature-dev@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
+  }
+}
