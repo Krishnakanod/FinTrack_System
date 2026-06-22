@@ -3,11 +3,11 @@
         "ANTHROPIC_API_KEY": "sk-ws-H.IYLMPM.sPZg.MEUCIAKBw-ujEmX2S62l6jRUhVuI7yRQsolqNy9OcRzAqj-KAiEAwzMdJanSYD75g_rO402U2FiTksPgL1MoRJyG45ZuCh4",
         "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.IYLMPM.sPZg.MEUCIAKBw-ujEmX2S62l6jRUhVuI7yRQsolqNy9OcRzAqj-KAiEAwzMdJanSYD75g_rO402U2FiTksPgL1MoRJyG45ZuCh4",
         "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
-        "ANTHROPIC_MODEL": "qwen3.5-27b",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.5-27b",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.5-27b",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.5-27b",
-        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3.5-27b"
+        "ANTHROPIC_MODEL": "qwen3-coder-480b-a35b-instruct",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3-coder-480b-a35b-instruct",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3-coder-480b-a35b-instruct",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3-coder-480b-a35b-instruct",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3-coder-480b-a35b-instruct"
     },
     "enabledPlugins": {
     "superpowers@claude-plugins-official": true,

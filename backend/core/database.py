@@ -1,10 +1,13 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
+from pydantic import BaseModel
 from core.config import settings
 from typing import List
 
-# Empty list that will be populated by future sprints with Beanie Document models
-document_models: List = []
+# Import all Beanie Document models here
+from modules.auth.models import User, OTP, RefreshToken
+
+document_models: List[type[BaseModel]] = [User, OTP, RefreshToken]
 
 motor_client: AsyncIOMotorClient | None = None
 

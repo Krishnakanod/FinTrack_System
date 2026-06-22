@@ -40,7 +40,7 @@
                          ▼
               ┌─────────────────────┐
               │   MongoDB Atlas      │
-              │   Database: fintrack │
+              │   Database: Fintrack │
               │   (Free Tier M0)     │
               └─────────────────────┘
 
@@ -68,7 +68,7 @@ and handles WebSocket upgrade headers for /ws/.
 | Backend Framework | FastAPI | 0.111+ | Single app, `APIRouter` per module |
 | Backend Language | Python | 3.11+ | |
 | Data Validation | Pydantic | v2 | |
-| Database | MongoDB Atlas | M0 Free | **Single database**: `fintrack` |
+| Database | MongoDB Atlas | M0 Free | **Single database**: `Fintrack` |
 | ODM | Motor (async) + Beanie | Latest | |
 | Auth Tokens | PyJWT | 2.x | |
 | Email | Gmail SMTP (App Password) | — | |
@@ -93,7 +93,7 @@ backend/
 ├── main.py                     # FastAPI app instantiation, router registration, startup/shutdown events
 ├── core/
 │   ├── config.py                # Settings (env vars) via pydantic-settings
-│   ├── database.py              # Single Motor client / Beanie init for `fintrack` db
+│   ├── database.py              # Single Motor client / Beanie init for `Fintrack` db
 │   ├── security.py              # JWT encode/decode, password hashing
 │   └── deps.py                  # Shared FastAPI dependencies (get_current_user, etc.)
 ├── modules/
@@ -185,7 +185,7 @@ This eliminates all internal network hops, internal auth, and retry/timeout hand
 
 ---
 
-## 5. Database Schema (Single MongoDB Database: `fintrack`)
+## 5. Database Schema (Single MongoDB Database: `Fintrack`)
 
 All collections live in one database. Field-level schema is unchanged from the original doc; only the database grouping is unified.
 
@@ -666,7 +666,7 @@ services:
 ### 10.4 Environment Variables (.env)
 ```
 MONGODB_URI=mongodb+srv://...
-MONGODB_DB_NAME=fintrack
+MONGODB_DB_NAME=Fintrack
 JWT_SECRET=<strong-secret>
 JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7

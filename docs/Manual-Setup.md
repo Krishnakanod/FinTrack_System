@@ -19,7 +19,7 @@
    - For production (after Sprint 1, once EC2 exists): you can restrict to your EC2's public IP
 5. Get your connection string: Database → Connect → Drivers → Python → copy the `mongodb+srv://...` URI.
 6. **You will need this for:** `MONGODB_URI` in `.env` (Sprint 1).
-7. Database name to use: `fintrack` (single database, per TRD.md).
+7. Database name to use: `Fintrack` (single database, per TRD.md).
 
 **Checklist:**
 - [ ] Cluster created
@@ -131,7 +131,7 @@ Everything else (3, 5, 6, 7, 8, 9) requires no new manual setup — they build o
 
 ```
 MONGODB_URI=
-MONGODB_DB_NAME=fintrack
+MONGODB_DB_NAME=Fintrack
 JWT_SECRET=                      (generate with: openssl rand -hex 32)
 GMAIL_USER=
 GMAIL_APP_PASSWORD=
