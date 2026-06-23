@@ -9,12 +9,13 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
   },
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3001',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // Disable webServer since we're running the dev server manually
+  // webServer: {
+  //   command: 'npm run dev',
+  //   url: 'http://localhost:3003',
+  //   reuseExistingServer: !process.env.CI,
+  //   timeout: 120 * 1000,
+  // },
   projects: [
     {
       name: 'chromium',
