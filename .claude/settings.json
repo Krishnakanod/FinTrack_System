@@ -3,11 +3,11 @@
         "ANTHROPIC_API_KEY": "sk-ws-H.IXEYXX.yRms.MEUCIQCzDwOFuqu4CJ3UmW0gUulkwQiwhPsrLRemGkl0Cp7m2wIgOS1G7a-ptNlDtDiyqm5TRwtQX7mC1MwwLZI001-6Nu0",
         "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.IXEYXX.yRms.MEUCIQCzDwOFuqu4CJ3UmW0gUulkwQiwhPsrLRemGkl0Cp7m2wIgOS1G7a-ptNlDtDiyqm5TRwtQX7mC1MwwLZI001-6Nu0",
         "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
-        "ANTHROPIC_MODEL": "qwen3.5-flash-2026-02-23",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.5-flash-2026-02-23",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.5-flash-2026-02-23",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.5-flash-2026-02-23",
-        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3.5-flash-2026-02-23"
+        "ANTHROPIC_MODEL": "deepseek-v3.2",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v3.2",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v3.2",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v3.2",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-v3.2"
     },
     "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
