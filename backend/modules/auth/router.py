@@ -9,6 +9,7 @@ from modules.auth.schemas import (
     LoginRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    ResendOtpRequest,
 )
 from modules.auth import service as auth_service
 from modules.auth.exceptions import (
@@ -160,6 +161,34 @@ async def forgot_password(request: ForgotPasswordRequest):
     """
     message = await auth_service.forgot_password(request)
     return {"message": message}
+
+
+# ===== RESEND OTP =====
+
+@router.post("/resend-otp", status_code=status.HTTP_200_OK)
+async def resend_otp(request: ResendOtpRequest):
+    """
+    Resend OTP for signup or forgot_password purposes.
+
+    - Deletes any existing OTP for this email+purpose (invalidates old OTP)
+    - Generates new OTP and emails it
+    - Resets the 1-minute cooldown timer on frontend
+    """
+    try:
+        message = await auth_service.resend_otp(
+            email=request.email,
+            purpose=request.purpose
+        )
+        return {"message": message}
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "OTP_SEND_FAILED",
+                "message": "Failed to send OTP. Please try again.",
+                "details": {},
+            },
+        )
 
 
 # ===== RESET PASSWORD =====

@@ -1,6 +1,6 @@
 """Auth module - Business logic services."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from modules.auth.models import User, OTP, RefreshToken
 from modules.auth.schemas import (
@@ -54,7 +54,7 @@ async def signup(data: SignupRequest) -> str:
     otp = security.generate_otp()
     otp_hash = security.hash_otp(otp)
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.utcnow()
 
     if existing_user:
         # Re-attempt signup on unverified user: update credentials
@@ -124,8 +124,8 @@ async def verify_otp(data: VerifyOtpRequest) -> tuple[dict, dict, str]:
     if not otp_record:
         raise InvalidOtpError()
 
-    # Check expiry
-    if datetime.now(timezone.utc) > otp_record.expires_at:
+    # Check expiry (both sides naive — UTC timestamps from MongoDB are offset-naive)
+    if datetime.utcnow() > otp_record.expires_at:
         await otp_record.delete()
         raise InvalidOtpError()
 
@@ -141,24 +141,27 @@ async def verify_otp(data: VerifyOtpRequest) -> tuple[dict, dict, str]:
     # For signup: set is_verified=True, delete OTP, issue tokens
     if purpose == "signup":
         user.is_verified = True
-        await user.save(update_fields=["is_verified"])
+        await user.save()
         await otp_record.delete()
     elif purpose == "login":
         # For login: just clear the OTP and reset failed attempts
         user.failed_login_attempts = 0
         user.locked_until = None
-        await user.save(update_fields=["failed_login_attempts", "locked_until"])
+        await user.set({
+            "failed_login_attempts": 0,
+            "locked_until": None,
+        })
         await otp_record.delete()
 
     # Issue tokens
     access_token = security.create_access_token(str(user.id))
     refresh_token = security.create_refresh_token(str(user.id))
 
-    # Store refresh token hash
+    # Store refresh token hash (naive datetime — Beanie returns naive datetimes from MongoDB)
     await RefreshToken(
         user_id=str(user.id),
         token_hash=security.hash_otp_simple(refresh_token),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.utcnow() + timedelta(days=7),
     ).insert()
 
     # Build responses
@@ -204,8 +207,8 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
     if not user:
         raise InvalidCredentialsError()
 
-    # Check if account is locked
-    now_utc = datetime.now(timezone.utc)
+    # Check if account is locked (naive UTC — MongoDB returns naive datetimes)
+    now_utc = datetime.utcnow()
     if user.locked_until and user.locked_until > now_utc:
         raise AccountLockedError(user.locked_until)
 
@@ -219,27 +222,30 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
             # Reset counter after setting lock (lockout already set, next attempt post-lockout starts fresh)
             user.failed_login_attempts = 0
 
-        await user.save(update_fields=["failed_login_attempts", "locked_until"])
+        await user.save()
         raise InvalidCredentialsError()
 
     # Check if verified
     if not user.is_verified:
         raise AccountNotVerifiedError()
 
-    # Successful login: reset failed attempts, issue tokens
+    # Successful login: reset failed attempts, issue tokens (naive datetime)
     user.failed_login_attempts = 0
     user.locked_until = None
-    await user.save(update_fields=["failed_login_attempts", "locked_until"])
+    await user.set({
+        "failed_login_attempts": 0,
+        "locked_until": None,
+    })
 
     # Issue tokens
     access_token = security.create_access_token(str(user.id))
     refresh_token = security.create_refresh_token(str(user.id))
 
-    # Store refresh token hash
+    # Store refresh token hash (naive UTC — MongoDB stores naive datetimes)
     await RefreshToken(
         user_id=str(user.id),
         token_hash=security.hash_otp_simple(refresh_token),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.utcnow() + timedelta(days=7),
     ).insert()
 
     # Build responses
@@ -258,6 +264,56 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
     return token_response, user_response, refresh_token
 
 
+# ===== RESEND OTP =====
+
+async def resend_otp(email: str, purpose: str) -> str:
+    """
+    Resend OTP for signup or forgot_password purposes.
+
+    - Deletes any existing OTP for this email+purpose
+    - Generates new OTP and emails it
+    - Returns success message
+
+    Args:
+        email: Normalized email address
+        purpose: Either 'signup' or 'forgot_password'
+
+    Returns:
+        Success message string
+    """
+    # Generate new OTP
+    otp = security.generate_otp()
+    otp_hash = security.hash_otp(otp)
+    now_utc = datetime.utcnow()
+
+    # Delete any existing OTP for this email+purpose (invalidates old OTP)
+    await OTP.find(
+        OTP.email == email,
+        OTP.purpose == purpose,
+    ).delete()
+
+    # Create new OTP with 10-min TTL
+    await OTP(
+        email=email,
+        otp_hash=otp_hash,
+        purpose=purpose,
+        expires_at=now_utc + timedelta(minutes=2),
+        created_at=now_utc,
+    ).insert()
+
+    # Send OTP email based on purpose
+    if purpose == "signup":
+        subject, body_html = create_otp_email_body(otp, "signup")
+    elif purpose == "forgot_password":
+        subject, body_html = create_otp_email_body(otp, "forgot_password")
+    else:
+        raise ValueError(f"Invalid purpose: {purpose}")
+
+    await send_email(email, subject, body_html)
+
+    return "A new OTP has been sent to your email."
+
+
 # ===== FORGOT PASSWORD =====
 
 async def forgot_password(data: ForgotPasswordRequest) -> str:
@@ -274,35 +330,37 @@ async def forgot_password(data: ForgotPasswordRequest) -> str:
 
     # Check if user exists (without revealing existence)
     user = await User.find_one(User.email == email_normalized)
-    if not user:
-        # Return success but don't send anything (anti-enumeration)
-        return "If an account exists with this email, an OTP has been sent."
+    if user:
+        otp = security.generate_otp()
+        otp_hash = security.hash_otp(otp)
+        now_utc = datetime.utcnow()
+
+         # Delete any existing OTP for forgot_password purpose
+        await OTP.find(
+              OTP.email == email_normalized,
+              OTP.purpose == "forgot_password",
+         ).delete()
+
+         # Create new OTP
+        await OTP(
+              email=email_normalized,
+              otp_hash=otp_hash,
+              purpose="forgot_password",
+              expires_at=now_utc + timedelta(minutes=2),
+              created_at=now_utc,
+         ).insert()
+
+         # Send OTP email
+        subject, body_html = create_otp_email_body(otp, "forgot_password")
+        await send_email(data.email, subject, body_html)
+
+        return "OTP has been sent to email."
+             # Return success but don't send anything (anti-enumeration)
+    else:
+        return "Account does not exist"
 
     # Generate and store OTP for password reset
-    otp = security.generate_otp()
-    otp_hash = security.hash_otp(otp)
-    now_utc = datetime.now(timezone.utc)
-
-    # Delete any existing OTP for forgot_password purpose
-    await OTP.find(
-        OTP.email == email_normalized,
-        OTP.purpose == "forgot_password",
-    ).delete()
-
-    # Create new OTP
-    await OTP(
-        email=email_normalized,
-        otp_hash=otp_hash,
-        purpose="forgot_password",
-        expires_at=now_utc + timedelta(minutes=10),
-        created_at=now_utc,
-    ).insert()
-
-    # Send OTP email
-    subject, body_html = create_otp_email_body(otp, "forgot_password")
-    await send_email(data.email, subject, body_html)
-
-    return "If an account exists with this email, an OTP has been sent."
+    
 
 
 # ===== RESET PASSWORD =====
@@ -336,8 +394,8 @@ async def reset_password(data: ResetPasswordRequest) -> str:
     if not otp_record:
         raise InvalidOtpError()
 
-    # Check expiry
-    if datetime.now(timezone.utc) > otp_record.expires_at:
+    # Check expiry (both sides naive — MongoDB stores naive datetimes)
+    if datetime.utcnow() > otp_record.expires_at:
         await otp_record.delete()
         raise InvalidOtpError()
 
@@ -354,7 +412,7 @@ async def reset_password(data: ResetPasswordRequest) -> str:
     user.password_hash = security.hash_password(data.new_password)
     user.failed_login_attempts = 0
     user.locked_until = None
-    await user.save(update_fields=["password_hash", "failed_login_attempts", "locked_until"])
+    await user.save()
 
     await otp_record.delete()
 
