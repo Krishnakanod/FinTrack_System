@@ -82,6 +82,8 @@ Per `TRD.md` §11.2-11.3:
 - [ ] Visiting `/dashboard` directly while logged out redirects to `/login`
 - [ ] `tests/auth.spec.ts` passes (`npx playwright test auth.spec.ts`)
 - [ ] Dashboard shell (sidebar, header, logout) renders correctly on desktop and mobile widths
+- [ ] **Password visibility toggle** (eye button) available on all password input fields
+- [ ] **Resend OTP functionality** with 1-minute countdown timer on signup and forgot-password flows
 
 ---
 
@@ -91,23 +93,126 @@ Per `TRD.md` §11.2-11.3:
 ### Sprint 3 Handoff Notes
 
 **What was built:**
-- [fill in]
+- Zustand auth store (`lib/store/auth-store.ts`) with user persistence to localStorage,
+  accessToken in memory only, and `_hasHydrated` flag for persist middleware hydration timing
+- API client (`lib/api/client.ts`) upgraded with Bearer token attachment, credentials: include
+  for refresh cookie, 401→refresh→retry cycle, and backend error shape surfacing
+- Auth API functions (`lib/api/auth.ts`) — typed wrappers for signup, verifyOtp, login,
+  forgotPassword, resetPassword, logout — exact signatures per Spec-03 §1.3
+- WebSocket placeholder (`lib/websocket.ts`) with TODO comment for Sprint 6
+- Root layout (`app/layout.tsx`) updated with Providers wrapper (Toaster + auth hooks init)
+- Auth pages:
+  - `/login` — email + password form with "Forgot password?" and "Sign up" links
+  - `/signup` — multi-step: details form → OTP verification step → redirect to `/login`
+  - `/forgot-password` — multi-page flow: email form → OTP + new password form → redirect to `/login`
+- Protected route wrapper (`app/dashboard/layout.tsx`) — auth guard with Zustand hydration wait,
+  sidebar + header + main content layout
+- Dashboard page (`app/dashboard/page.tsx`) — placeholder stat cards, recent activity, quick actions
+- Dashboard shell components:
+  - `components/dashboard/sidebar.tsx` — 9 nav items (Dashboard active, 8 marked "Coming soon")
+  - `components/dashboard/header.tsx` — user name, avatar icon, logout button
+- Playwright tests (`tests/auth.spec.ts`) — 16 tests covering login, signup, forgot-password,
+  protected routes, and dashboard shell (all passing)
 
-**Decisions made (not already in TRD.md):**
-- [e.g., OTP step implementation: same-page state vs separate route]
-- [e.g., toast library used: sonner / shadcn toast]
+**Decisions made (not in TRD.md):**
+- **OTP flow (Krishna-specified):** Signup → OTP step → redirect to `/login` (NOT dashboard).
+  Forgot password: email page → OTP + new password page → redirect to `/login`.
+- **Toast library:** `sonner` (shadcn recommended), installed via `npx shadcn@latest add sonner`
+- **Nav items for unbuilt pages:** Rendered as disabled (opacity-50 with "Soon" label) in sidebar
+- **User persistence:** Zustand `persist` middleware with `localStorage`, partialize to `user` only
+- **Auth guard approach:** Dashboard layout checks `user` from store (not `isAuthenticated`).
+  Uses `_hasHydrated` flag to wait for Zustand persist hydration before redirecting.
+  `accessToken` intentionally does NOT persist — API client handles silent refresh on 401.
+- **Zod v4 API:** `z` is a named export (not default). Validation uses `.regex()` for complexity.
+- **Next.js 16:** Actual version is 16.2.9 (docs say 14). App Router patterns are compatible.
 
 **Known issues / deferred items:**
-- [fill in, or "None"]
+- The `setAuth` method in auth store passes `null` as accessToken during rehydration
+  (`onRehydrateStorage` calls `state.setAuth(null as any, state.user)`) — this works
+  because `isAuthenticated` is set to `true` by `setAuth`, but the accessToken remains null.
+  The API client's 401-refresh-retry cycle handles this gracefully.
+- `GET /api/v1/auth/me` endpoint exists on backend but is not integrated into the frontend
+  refresh flow yet — on hard reload, the persisted `user` is used with the freshly acquired
+  access token. If user is missing but refresh succeeds, no profile fetch happens. This is
+  acceptable per Spec-03 §1.6 note.
+
+## Sprint 3.1 Enhancements (Post-Sprint-3 Additions)
+
+### Password Visibility Toggle (Eye Icon Button)
+**Files Modified:** 
+- `frontend/app/(auth)/login/page.tsx`
+- `frontend/app/(auth)/signup/page.tsx`
+- `frontend/app/(auth)/forgot-password/page.tsx`
+
+**Implementation:**
+- Added `import { Eye, EyeOff } from "lucide-react"` to each auth page
+- For each password input field:
+  - Wrapped Input in a relative container
+  - Added eye/eye-off icon button overlay on the right side
+  - Toggle button switches `type="password"` ↔ `type="text"`
+  - Added `showPassword`/`showConfirmPassword`/`showNewPassword` state variables
+  - Set `autoComplete={showPassword ? "off" : "current-password/new-password"}` for better browser behavior
+
+**User Experience:**
+- Users can now see what they're typing in password fields
+- Eye icon appears inside the input box on the right side
+- Clicking toggles between hidden and visible password text
+
+---
+
+### Resend OTP with 1-Minute Countdown Timer
+**Backend Files Modified/Created:**
+- `backend/modules/auth/schemas.py` — Added `ResendOtpRequest` schema with `email` and `purpose` fields
+- `backend/modules/auth/service.py` — Added `resend_otp()` function that:
+  - Deletes existing OTP for email+purpose (invalidates old OTP)
+  - Generates new OTP and creates fresh record with 10-min TTL
+  - Sends email based on purpose (signup or forgot_password)
+- `backend/modules/auth/router.py` — Added POST `/api/v1/auth/resend-otp` endpoint
+
+**Frontend Files Modified:**
+- `frontend/lib/api/auth.ts` — Added `resendOtp()` API function
+- `frontend/app/(auth)/signup/page.tsx` — Sign-up OTP verification page
+- `frontend/app/(auth)/forgot-password/page.tsx` — Reset password OTP page
+
+**Implementation Details:**
+- Added `useEffect` import and `timeLeft`, `resendOtpLoading` state variables
+- Countdown timer starts at 60 seconds when OTP step becomes active
+- Timer displays "Resend available in MM:SS" format (e.g., "00:59", "00:32")
+- "Resend OTP" button is disabled during countdown
+- When timer reaches 0, clickable "Resend OTP" button appears
+- Clicking resends new OTP, invalidates old one, resets timer to 60s
+- Timer automatically resets when navigating away from OTP page
+
+**Visual Placement:**
+- Resend button/timer displayed below OTP input field
+- Text countdown shown while disabled
+- Button appears only after cooldown expires
+
+---
 
 **What Sprint 5 needs to know:**
-- Sidebar navigation component location and how to know the active route pattern
-- How protected pages should be structured (do they live under app/dashboard/* and
-  inherit the layout automatically?)
-- Exact path to lib/api/client.ts and how other modules' API functions should follow
-  the lib/api/auth.ts pattern
+- Sidebar nav component is at `components/dashboard/sidebar.tsx`. It uses `usePathname()`
+  to highlight the active route. Pages should live under `app/dashboard/<feature>/page.tsx`
+  (they automatically inherit the dashboard layout).
+- `lib/api/client.ts` is the base fetch function with auth interceptor. Other modules should
+  follow the `lib/api/auth.ts` pattern: import `apiFetch` + define typed wrappers + export
+  both types and functions.
+- All API functions use the `apiFetch` generic for automatic error handling.
+- Toast library is `sonner` — use `import { toast } from "sonner"`.
 
 **What Sprint 6 needs to know:**
-- lib/websocket.ts exists as a placeholder — implement and wire into
-  app/dashboard/layout.tsx per TRD.md §12
+- `lib/websocket.ts` exists as a placeholder — implement and wire into
+  `app/dashboard/layout.tsx` per TRD.md §12
+- The sidebar has `className="hidden w-64 ... lg:block"` — the sidebar is hidden on mobile.
+  Sprint 6 should add a hamburger menu toggle if the WebSocket connection is to be used
+  on mobile views.
+- `components/providers.tsx` initializes auth hooks and renders `Toaster` — if Sprint 6
+  adds additional providers (QueryClientProvider for TanStack Query), add them here.
+
+**Sprint 3.1 Enhancements Summary:**
+- **Password visibility toggles** added to all password inputs using lucide-react's Eye/EyeOff icons
+- **Resend OTP with countdown timer** implemented:
+  - Backend: New `/api/v1/auth/resend-otp` endpoint that invalidates old OTP and sends new one
+  - Frontend: 1-minute cooldown timer displayed below OTP input
+  - Timer resets when clicking "Resend OTP" or navigating away from OTP page
 ```

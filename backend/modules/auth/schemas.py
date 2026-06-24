@@ -12,7 +12,7 @@ class SignupRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, max_length=72)
     confirm_password: str
 
     @model_validator(mode="after")
@@ -50,6 +50,13 @@ class ForgotPasswordRequest(BaseModel):
     """Request body for forgot password."""
 
     email: EmailStr
+
+
+class ResendOtpRequest(BaseModel):
+    """Request body for resending OTP."""
+
+    email: EmailStr
+    purpose: str = Field(..., description="Either 'signup' or 'forgot_password'")
 
 
 class ResetPasswordRequest(BaseModel):

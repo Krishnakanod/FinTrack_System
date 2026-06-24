@@ -41,7 +41,8 @@ async def send_email(
         "port": 587,
         "username": settings.gmail_user,
         "password": settings.gmail_app_password,
-        "use_tls": True,
+        "use_tls": False,
+        "start_tls": True
     }
 
     try:

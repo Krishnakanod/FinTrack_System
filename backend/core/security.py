@@ -4,9 +4,10 @@ import secrets
 import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
+import hashlib
 from passlib.context import CryptContext
 from jose import jwt, JWTError, ExpiredSignatureError
+import bcrypt
 
 from core.config import settings
 
@@ -17,12 +18,17 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(plain_password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(plain_password)
+    pre_hashed = hashlib.sha256(plain_password.encode('utf-8')).hexdigest().encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(password=pre_hashed, salt=salt)
+    return hashed_bytes.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    pre_hashed = hashlib.sha256(plain_password.encode('utf-8')).hexdigest().encode('utf-8')
+    hashed_password_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password=pre_hashed, hashed_password=hashed_password_bytes)
 
 
 def create_access_token(user_id: str) -> str:
@@ -82,12 +88,13 @@ def generate_otp() -> str:
 
 def hash_otp(otp: str) -> str:
     """Hash an OTP using bcrypt for secure storage."""
-    return pwd_context.hash(otp)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(otp.encode('utf-8'), salt).decode('utf-8')
 
 
 def verify_otp_hash(otp: str, hashed_otp: str) -> bool:
     """Verify an OTP against its hash."""
-    return pwd_context.verify(otp, hashed_otp)
+    return bcrypt.checkpw(otp.encode('utf-8'), hashed_otp.encode('utf-8'))
 
 
 def hash_otp_simple(otp: str) -> str:
@@ -97,4 +104,4 @@ def hash_otp_simple(otp: str) -> str:
 
 def verify_otp_hash_simple(otp: str, hashed_otp: str) -> bool:
     """Verify OTP against SHA-256 hash."""
-    return hashlib.sha256(otp.encode()).hexdigest() == hashed_otp
+    return bcrypt.checkpw(otp.encode('utf-8'), hashed_otp.encode('utf-8'))
