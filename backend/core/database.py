@@ -6,8 +6,10 @@ from typing import List
 
 # Import all Beanie Document models here
 from modules.auth.models import User, OTP, RefreshToken
+from modules.expenses.models import Expense
+from modules.income.models import Income
 
-document_models: List[type[BaseModel]] = [User, OTP, RefreshToken]
+document_models: List[type[BaseModel]] = [User, OTP, RefreshToken, Expense, Income]
 
 motor_client: AsyncIOMotorClient | None = None
 

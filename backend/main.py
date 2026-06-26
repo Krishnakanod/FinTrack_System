@@ -1,9 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from core.config import settings
 from core import database
 from modules.auth.router import router as auth_router
+from modules.expenses.router import router as expenses_router
+from modules.income.router import router as income_router
 
 
 @asynccontextmanager
@@ -29,8 +33,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ===== Global Exception Handlers =====
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Convert FastAPI's default 422 validation errors into consistent error shape.
+    Per Spec-04.md §1.4 — validation error response shape.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "VALIDATION_ERROR",
+            "message": "Request validation failed.",
+            "details": exc.errors(),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all for unhandled exceptions — prevents raw FastAPI HTML error pages.
+    Returns a safe 500 response.
+    """
+    # Log the actual error for debugging (in production, use proper logging)
+    import traceback
+    traceback.print_exc()
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred.",
+            "details": {},
+        },
+    )
+
+
 # Include routers
 app.include_router(auth_router)
+app.include_router(expenses_router)
+app.include_router(income_router)
 
 
 @app.get("/health")
