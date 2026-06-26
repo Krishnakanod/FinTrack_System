@@ -98,6 +98,11 @@ async function apiFetch<T = unknown>(
     return handleError(response);
   }
 
+  // 204 No Content has no body — return void instead of trying to parse JSON.
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 

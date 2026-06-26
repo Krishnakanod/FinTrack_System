@@ -49,7 +49,11 @@ class IncomeUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_friend_id_on_update(self):
-        """Re-validate friend_id rule if source_type or friend_id changed."""
+        """Re-validate friend_id rule whenever source_type or friend_id is present.
+
+        For partial updates: if neither field is set, skip validation.
+        If only friend_id is set, validate it independently.
+        """
         source = self.source_type
         friend = self.friend_id
         if source is not None and source == IncomeSourceType.FROM_FRIEND:
@@ -58,6 +62,11 @@ class IncomeUpdate(BaseModel):
         elif source is not None and source == IncomeSourceType.SALARY:
             if friend is not None:
                 raise ValueError("friend_id must be null when source_type is 'salary'.")
+        # If source_type is not being changed (None) but friend_id is provided,
+        # validate friend_id independently. This handles cases where the frontend
+        # sends friend_id but not source_type during a partial update.
+        elif source is None and friend is not None:
+            raise ValueError("friend_id must be null when source_type is 'salary'.")
         return self
 
 

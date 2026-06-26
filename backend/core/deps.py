@@ -10,7 +10,7 @@ from core import security
 security_bearer = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(authorization: str = Header(...)) -> User:
+async def get_current_user(authorization: str | None = Header(None)) -> User:
     """
     FastAPI dependency that validates JWT Bearer token and returns the User.
 
@@ -20,6 +20,16 @@ async def get_current_user(authorization: str = Header(...)) -> User:
     Raises:
         HTTPException(401): If token is missing, malformed, expired, or user not found.
     """
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "UNAUTHORIZED",
+                "message": "Authentication required. Please log in.",
+                "details": {},
+            },
+        )
+
     try:
         # Parse Bearer token
         if not authorization.startswith("Bearer "):

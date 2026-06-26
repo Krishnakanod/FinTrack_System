@@ -40,13 +40,30 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     Convert FastAPI's default 422 validation errors into consistent error shape.
     Per Spec-04.md §1.4 — validation error response shape.
+
+    Special case: missing Authorization header should return 401, not 422.
     """
+    errors = exc.errors()
+    # If the only error is a missing Authorization header, return 401
+    if (
+        len(errors) == 1
+        and errors[0]["type"] == "missing"
+        and errors[0].get("loc") == ("header", "authorization")
+    ):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "error": "UNAUTHORIZED",
+                "message": "Authentication required. Please log in.",
+                "details": {},
+            },
+        )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": "VALIDATION_ERROR",
             "message": "Request validation failed.",
-            "details": exc.errors(),
+            "details": errors,
         },
     )
 

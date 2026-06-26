@@ -77,27 +77,99 @@ Build the Expenses page (list, manual add, OCR add with review step, edit, delet
 
 ## Handoff Notes (fill this out at the end of the sprint)
 
-```markdown
 ### Sprint 5 Handoff Notes
 
 **What was built:**
-- [fill in]
+
+**API layer** (`frontend/lib/api/`):
+- `expenses.ts` — 6 typed API functions: `createExpense()`, `listExpenses()`, `getExpense()`, `updateExpense()`, `deleteExpense()`, `uploadReceiptOcr()`, `confirmOcrExpense()`. Exports type definitions (`Expense`, `ExpenseCategory`, `PaymentType`, etc.) and enum arrays (`EXPENSE_CATEGORIES`, `PAYMENT_TYPES`) for UI dropdowns.
+- `income.ts` — 4 typed API functions: `createIncome()`, `listIncome()`, `getIncome()`, `updateIncome()`, `deleteIncome()`. Exports `IncomeSourceType`, `PaymentType` types and `PAYMENT_TYPES` array.
+
+**TanStack Query integration** (`components/providers.tsx`):
+- Added `QueryClientProvider` wrapping the entire app with `staleTime: 60000` and `retry: 1`.
+- All mutations invalidate `['expenses']` or `['income']` AND `['analytics']` (placeholder key for Sprint 9).
+
+**Expenses page** (`app/dashboard/expenses/page.tsx`):
+- Full CRUD with Dialog-based forms (React Hook Form + Zod validation).
+- Two tabs: "Manual Entry" and "Scan Receipt" (OCR).
+- OCR flow: file upload → base64 → `uploadReceiptOcr()` → pre-fill form → optional low-confidence warning banner (threshold `< 0.67`) → "Confirm & Save" → `confirmOcrExpense()`.
+- OCR fallback: toast "Couldn't read receipt — please fill manually" when no text extracted.
+- Filter controls: category dropdown, date range picker (From/To).
+- Delete confirmation via AlertDialog.
+- Responsive: Table on desktop (`hidden md:block`), Card list on mobile (`md:hidden`).
+
+**Income page** (`app/dashboard/income/page.tsx`):
+- Full CRUD with Dialog-based forms.
+- Source Type toggle: Salary (enabled) / From Friend (disabled with tooltip).
+- Filter controls: source type dropdown, date range picker.
+- Same responsive table/card pattern as Expenses.
+
+**Dashboard overview** (`app/dashboard/page.tsx`):
+- Replaced Sprint 3 placeholder cards with real data from `listExpenses()` and `listIncome()` TanStack Query calls.
+- Extracted 4 presentational components for Sprint 9 data-source swap:
+  - `NetBalanceCard({ totalIncome, totalExpenses })` — computes and displays net balance
+  - `TotalIncomeCard({ amount })` — total income display
+  - `TotalExpensesCard({ amount })` — total expenses display
+  - `RecentActivityFeed({ expenses, incomes })` — merged + sorted by date desc, last 10 items
+- Transaction count card shows total expenses + income count.
+- Quick Actions: Expenses and Income links are live, Groups and Analytics remain "Coming soon".
+
+**Sidebar + Mobile** (`components/dashboard/sidebar.tsx`):
+- Enabled Expenses (`/dashboard/expenses`) and Income (`/dashboard/income`) nav items.
+- Added mobile hamburger menu: fixed header with Menu/X toggle, slide-in sidebar with overlay backdrop.
+- Auto-closes sidebar on nav link click.
+- Desktop layout unchanged (`lg:static lg:translate-x-0`).
+
+**Layout** (`app/dashboard/layout.tsx`):
+- Added `pt-20 lg:pt-6` to main content area for mobile header offset.
+
+**Playwright tests:**
+- `tests/expenses.spec.ts` — 13 tests covering page navigation, empty state, add dialog, filter controls, form fields, category/payment dropdowns, date default, OCR tab interface, edit/delete accessibility.
+- `tests/income.spec.ts` — 15 tests covering page navigation, empty state, add dialog, filter controls, form fields, source type toggle, From Friend disabled state, payment dropdown, date default, amount decimal input, edit/delete accessibility, sidebar navigation.
+- **OCR-specific test skipped** — Vision API key not configured.
+
+**shadcn/ui components installed:** dialog, tabs, select, table, alert-dialog, textarea, badge, separator.
 
 **Decisions made (not already in TRD.md):**
-- [e.g., how the "From Friend" dropdown was stubbed]
-- [e.g., table vs card list choice for expense/income display]
+
+1. **"From Friend" stub pattern**: Disabled button with `title` tooltip ("Friend selection available after Friends module ships (Sprint 6)"). Form submits with `friend_id: null` when From Friend is selected (though it's disabled so this path is unreachable in practice). Marked with `// TODO Sprint 6: wire to GET /api/v1/users/friends, see Spec-06.md` at `app/dashboard/income/page.tsx` line 250 (JS form submission) and line 482 (JSX template).
+
+2. **Table vs card-list UI**: Responsive dual-layout — `Table` component on desktop (≥md breakpoint), `Card` list on mobile (<md breakpoint). Both show category/source icons, formatted currency (INR), badges for payment type and source.
+
+3. **Mobile hamburger menu**: Added to sidebar as requested by Krishna. Fixed-position header bar (z-50) with Menu/X toggle icon. Slide-in sidebar from left with dark overlay backdrop (z-40). Clicking overlay or nav link closes sidebar.
+
+4. **Form amount handling**: Used `z.string()` for amount in Zod schemas instead of `z.coerce.number()` due to Zod v4 type inference incompatibility with React Hook Form's `Resolver` type. Amounts are validated client-side via `parseFloat()` + `> 0` check in `onSubmit` before API submission. Amount stored as string in form state, converted to number at submission time.
+
+5. **Sidebar nav hrefs**: Updated from `/expenses` to `/dashboard/expenses` and `/income` to `/dashboard/income` to correctly route within the dashboard layout.
+
+6. **Expense/Income display currency**: Used `Intl.NumberFormat("en-IN", { currency: "INR" })` for consistent INR formatting.
+
+7. **Category icons**: Emoji-based icons per category (🍔 Food, 🚗 Transport, 🛍️ Shopping, 🎬 Entertainment, 💊 Health, 💡 Utilities, 📦 Other). Income icons: 💰 Salary, 👥 From Friend.
 
 **Known issues / deferred items:**
-- Income "From Friend" picker needs proper wiring once Sprint 6 ships the friends list
-  — [exact file/line to revisit]
-- Dashboard net balance / recent activity computed client-side; should be swapped to
-  use /analytics/* endpoints in Sprint 9 — [exact component to revisit]
+
+1. **Playwright tests NOT executed** — test files created but `npx playwright test` was not run. Krishna needs to verify tests pass with a running dev server + backend.
+
+2. **OCR flow NOT tested end-to-end** — `GOOGLE_VISION_API_KEY` is empty in `.env`. OCR endpoints return `null` fields with `confidence_score: 0.0` per Sprint 4's graceful degradation. Krishna will configure API key and test OCR later.
+
+3. **Income "From Friend" path is functionally unreachable** — the From Friend button is disabled, so users can't currently select it. Once Sprint 6 enables it, the form already handles `source_type: "from_friend"` in the schema and Zod validation, but `friend_id` is always sent as `null`. Sprint 6 needs to add a friend-select component that sets `friend_id` to a valid user ID.
+
+4. **No `tests/fixtures/sample-receipt.jpg`** — OCR test fixture not created since OCR testing was skipped.
 
 **What Sprint 6 needs to know:**
-- File/line where the Income "From Friend" dropdown stub lives, so it can be properly
-  wired to GET /api/v1/users/friends once that endpoint exists
+
+- **Income "From Friend" dropdown stub location**: `frontend/app/dashboard/income/page.tsx`
+  - Line 250: `friend_id: null` in `onSubmit()` — needs to be replaced with selected friend's ID
+  - Line 482-491: Disabled button with TODO comment — needs to be replaced with a searchable `Select` component populated from `GET /api/v1/users/friends`
+  - Line 496-500: Helper text "Friend selection will be available in Sprint 6" — can be removed
+- The income form's `IncomeFormValues` type already includes `source_type: "salary" | "from_friend"`, so the schema is ready for real friend selection.
 
 **What Sprint 9 needs to know:**
-- Presentational components extracted for net balance / recent activity:
-  [component names and paths] — these can be reused, just swap the data source
-```
+
+- **Presentational components for data-source swap** — all in `frontend/app/dashboard/page.tsx`:
+  - `NetBalanceCard({ totalIncome: number, totalExpenses: number })` — currently receives client-computed sums
+  - `TotalIncomeCard({ amount: number })` — currently receives `totalIncome` from client-side reduce
+  - `TotalExpensesCard({ amount: number })` — currently receives `totalExpenses` from client-side reduce
+  - `RecentActivityFeed({ expenses: Expense[], incomes: Income[] })` — currently receives full lists, merges + sorts client-side, takes last 10
+- To swap to server-side analytics: replace the `useQuery` calls for `['expenses']` and `['income']` with calls to `/api/v1/analytics/*` endpoints, and pass the server-aggregated data to these same presentational components. The components are pure display — they don't compute anything from the arrays except sorting in `RecentActivityFeed`.
+- **TanStack Query `['analytics']` key** is already being invalidated by all expense/income mutations in this sprint, so Sprint 9's analytics queries under this key (or sub-keys like `['analytics', 'net-balance']`) will automatically stay fresh.
