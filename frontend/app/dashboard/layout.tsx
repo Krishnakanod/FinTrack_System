@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
+import { useWebSocket } from "@/lib/websocket";
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,9 @@ export default function DashboardLayout({
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [isLoading, setIsLoading] = useState(true);
+
+  // WebSocket connection — auto-connects when authenticated (Spec-06 §1.9)
+  useWebSocket();
 
   useEffect(() => {
     // Wait for Zustand persist hydration to complete before checking auth

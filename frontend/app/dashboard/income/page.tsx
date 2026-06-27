@@ -64,6 +64,7 @@ import {
   type PaymentType,
   type IncomeUpdateInput,
 } from "@/lib/api/income";
+import { listFriends, type FriendProfile } from "@/lib/api/friends";
 import type { ApiError } from "@/lib/api/client";
 
 // ===== Form Schema =====
@@ -121,6 +122,15 @@ export default function IncomePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   const [deletingIncome, setDeletingIncome] = useState<Income | null>(null);
+  const [selectedFriendId, setSelectedFriendId] = useState<string>("");
+
+  // Fetch friends for "From Friend" dropdown (Sprint 6 — replaces Sprint 5 stub)
+  const { data: friendsData } = useQuery({
+    queryKey: ["friends"],
+    queryFn: listFriends,
+    staleTime: 60 * 1000,
+  });
+  const friends = friendsData?.items ?? [];
 
   // Fetch income
   const { data, isLoading } = useQuery({
@@ -217,6 +227,7 @@ export default function IncomePage() {
       date: new Date().toISOString().split("T")[0],
       payment_type: "",
     });
+    setSelectedFriendId("");
   }
 
   function handleEdit(income: Income) {
@@ -226,6 +237,9 @@ export default function IncomePage() {
     setValue("amount", String(income.amount));
     setValue("date", income.date);
     setValue("payment_type", income.payment_type);
+    if (income.friend_id) {
+      setSelectedFriendId(income.friend_id);
+    }
     setIsAddDialogOpen(true);
   }
 
@@ -275,7 +289,7 @@ export default function IncomePage() {
       // Create NEW income - must include all required fields
       const payload = {
         source_type: data.source_type as IncomeSourceType,
-        friend_id: data.source_type === "salary" ? undefined : undefined,
+        friend_id: data.source_type === "from_friend" ? selectedFriendId || null : null,
         description: data.description || "",
         amount: amountNum,
         date: data.date,
@@ -502,14 +516,11 @@ export default function IncomePage() {
                 >
                   💰 Salary
                 </Button>
-                {/* TODO Sprint 6: wire to GET /api/v1/users/friends, see Spec-06.md — replace disabled button with searchable Select populated from friends list */}
                 <Button
                   type="button"
                   variant={watchedSourceType === "from_friend" ? "default" : "outline"}
                   onClick={() => setValue("source_type", "from_friend")}
                   className="w-full"
-                  disabled
-                  title="Friend selection available after Friends module ships (Sprint 6)"
                 >
                   👥 From Friend
                 </Button>
@@ -518,9 +529,35 @@ export default function IncomePage() {
                 <p className="text-sm text-red-500">{errors.source_type.message}</p>
               )}
               {watchedSourceType === "from_friend" && (
-                <p className="text-xs text-zinc-500">
-                  Friend selection will be available in Sprint 6
-                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="friend-select">Select Friend *</Label>
+                  <Select
+                    value={selectedFriendId}
+                    onValueChange={setSelectedFriendId}
+                  >
+                    <SelectTrigger id="friend-select">
+                      <SelectValue placeholder="Choose a friend..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {friends.length === 0 ? (
+                        <div className="px-2 py-4 text-center text-sm text-zinc-500">
+                          No friends in your list. Add friends first.
+                        </div>
+                      ) : (
+                        friends.map((friend) => (
+                          <SelectItem key={friend.id} value={friend.id}>
+                            {friend.name} ({friend.email})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {watchedSourceType === "from_friend" && !selectedFriendId && (
+                    <p className="text-xs text-zinc-500">
+                      Select a friend to associate with this income
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

@@ -8,6 +8,8 @@ from core import database
 from modules.auth.router import router as auth_router
 from modules.expenses.router import router as expenses_router
 from modules.income.router import router as income_router
+from modules.users.router import router as users_router
+from modules.websocket.router import router as websocket_router
 
 
 @asynccontextmanager
@@ -92,6 +94,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_router)
 app.include_router(expenses_router)
 app.include_router(income_router)
+app.include_router(users_router)
+app.include_router(websocket_router)
 
 
 @app.get("/health")

@@ -23,7 +23,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Expenses", href: "/dashboard/expenses", icon: Receipt },
   { label: "Income", href: "/dashboard/income", icon: Wallet },
-  { label: "Friends", href: "/dashboard/friends", icon: Users, comingSoon: true },
+  { label: "Friends", href: "/dashboard/friends", icon: Users },
   { label: "Groups", href: "/dashboard/groups", icon: UsersRound, comingSoon: true },
   { label: "Balances", href: "/dashboard/balances", icon: Scale, comingSoon: true },
   { label: "Budget", href: "/dashboard/budget", icon: Target, comingSoon: true },

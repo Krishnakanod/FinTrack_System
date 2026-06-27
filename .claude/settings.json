@@ -1,13 +1,13 @@
 {
     "env": {
-        "ANTHROPIC_API_KEY": "sk-ws-H.LIMLLX.v1Gn.MEYCIQDK4XTY6W1L9x4r5CtGT4ySfaX85S7fmt3F0T1njT4kAAIhAOnWoolJ5sV1o6ddF-NzwaebmuovDa1VzNQJ2xgck180",
-        "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.LIMLLX.v1Gn.MEYCIQDK4XTY6W1L9x4r5CtGT4ySfaX85S7fmt3F0T1njT4kAAIhAOnWoolJ5sV1o6ddF-NzwaebmuovDa1VzNQJ2xgck180",
+        "ANTHROPIC_API_KEY": "sk-ws-H.LRXDXY.t2U3.MEUCIQDJmWP9jyRAloFUwLzu7GgkZrXNIq_lknc5pULUqhZ-HAIgCKhjoEed02K2o5yzouHzP5OHOPIdRaaX9LOaq3RKxxg",
+        "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.LRXDXY.t2U3.MEUCIQDJmWP9jyRAloFUwLzu7GgkZrXNIq_lknc5pULUqhZ-HAIgCKhjoEed02K2o5yzouHzP5OHOPIdRaaX9LOaq3RKxxg",
         "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
-        "ANTHROPIC_MODEL": "qwen3.5-35b-a3b",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.5-35b-a3b",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.5-35b-a3b",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.5-35b-a3b",
-        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3.5-35b-a3b"
+        "ANTHROPIC_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k2.7-code",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k2.7-code"
     },
     "enabledPlugins": {
     "superpowers@claude-plugins-official": true,

@@ -1,15 +1,16 @@
 {
-  "name": "tests",
+  "name": "fintrack-e2e-tests",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {},
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "description": "End-to-end tests for FinTrack System using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
+    "test:headed": "playwright test --headed"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.61.0",
-    "@types/node": "^26.0.0"
+    "@playwright/test": "^1.51.0",
+    "@types/node": "^22.13.10"
   }
 }
