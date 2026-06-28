@@ -8,8 +8,12 @@ from typing import List
 from modules.auth.models import User, OTP, RefreshToken
 from modules.expenses.models import Expense
 from modules.income.models import Income
+from modules.users.models import Friendship
+from modules.notifications.models import Notification
 
-document_models: List[type[BaseModel]] = [User, OTP, RefreshToken, Expense, Income]
+document_models: List[type[BaseModel]] = [
+    User, OTP, RefreshToken, Expense, Income, Friendship, Notification
+]
 
 motor_client: AsyncIOMotorClient | None = None
 
