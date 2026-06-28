@@ -10,6 +10,7 @@ from modules.expenses.router import router as expenses_router
 from modules.income.router import router as income_router
 from modules.users.router import router as users_router
 from modules.websocket.router import router as websocket_router
+from modules.groups.router import router as groups_router
 
 
 @asynccontextmanager
@@ -96,6 +97,7 @@ app.include_router(expenses_router)
 app.include_router(income_router)
 app.include_router(users_router)
 app.include_router(websocket_router)
+app.include_router(groups_router)
 
 
 @app.get("/health")

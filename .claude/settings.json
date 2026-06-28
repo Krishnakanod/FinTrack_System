@@ -1,7 +1,7 @@
 {
     "env": {
-        "ANTHROPIC_API_KEY": "sk-ws-H.LRXDXY.t2U3.MEUCIQDJmWP9jyRAloFUwLzu7GgkZrXNIq_lknc5pULUqhZ-HAIgCKhjoEed02K2o5yzouHzP5OHOPIdRaaX9LOaq3RKxxg",
-        "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.LRXDXY.t2U3.MEUCIQDJmWP9jyRAloFUwLzu7GgkZrXNIq_lknc5pULUqhZ-HAIgCKhjoEed02K2o5yzouHzP5OHOPIdRaaX9LOaq3RKxxg",
+        "ANTHROPIC_API_KEY": "sk-ws-H.PHIXMX.pbyd.MEUCIDYVfZh8OyvE7W4QDWPgyAupGVGDWtsgJl9mWTVOp7Q6AiEAphysqGwg29RoVwrbV7LX94O1h6RFJ966vmChWKhrmKw",
+        "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.PHIXMX.pbyd.MEUCIDYVfZh8OyvE7W4QDWPgyAupGVGDWtsgJl9mWTVOp7Q6AiEAphysqGwg29RoVwrbV7LX94O1h6RFJ966vmChWKhrmKw",
         "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
         "ANTHROPIC_MODEL": "kimi-k2.7-code",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k2.7-code",

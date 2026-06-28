@@ -14,9 +14,17 @@
 
 import { create } from "zustand";
 
+export interface GroupTransactionPayload {
+  group_id: string;
+  transaction_id: string;
+  description: string;
+  amount: number;
+  actor_name: string;
+}
+
 export interface WebSocketEvent {
   type: "GROUP_TRANSACTION" | "BUDGET_ALERT" | "NOTIFICATION";
-  payload: unknown;
+  payload: GroupTransactionPayload | Record<string, unknown>;
 }
 
 interface WebSocketState {
