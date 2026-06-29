@@ -434,15 +434,15 @@ export class FriendsPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.searchEmailInput = page.getByLabel('Email').filter({ hasText: /@/ }).first().or(page.getByPlaceholder(/friend@example.com/i));
-    this.searchButton = page.getByRole('button', { name: /search/i });
-    this.searchResult = page.locator('.border').filter({ has: page.getByText(/@/) });
-    this.addFriendButton = page.getByRole('button', { name: /add friend/i });
-    this.friendsList = page.locator('[role="list"]').or(page.locator('table').or(page.locator('.space-y-2')));
-    this.friendRows = page.locator('[role="listitem"]').or(page.locator('tbody tr')).or(this.friendsList.locator('> div > div').first().locator('..').locator('div'));
-    this.noFriendsText = page.getByText(/no friends/i);
-    this.removeFriendButtons = page.getByRole('button', { name: /remove/i }).or(page.locator('button').filter({ has: page.locator('svg').last() }));
-    this.removeConfirmButton = page.getByRole('button', { name: /remove/i }).filter({ hasNot: page.locator('span') }).or(page.locator('[role="alertdialog"]').getByRole('button', { name: /remove/i }));
+    this.searchEmailInput = page.getByTestId('friend-search-email');
+    this.searchButton = page.getByTestId('friend-search-button');
+    this.searchResult = page.getByTestId('friend-search-result');
+    this.addFriendButton = page.getByTestId('add-friend-button');
+    this.friendsList = page.getByTestId('friends-list');
+    this.friendRows = page.getByTestId('friend-row');
+    this.noFriendsText = page.getByTestId('no-friends-message');
+    this.removeFriendButtons = page.getByTestId('remove-friend-button');
+    this.removeConfirmButton = page.locator('[role="alertdialog"]').getByRole('button', { name: /remove/i });
     this.removeCancelButton = page.getByRole('button', { name: /cancel/i });
   }
 

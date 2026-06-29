@@ -8,6 +8,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
 import { useWebSocket } from "@/lib/websocket";
+import { WebSocketEventListener } from "@/components/dashboard/websocket-event-listener";
 
 export default function DashboardLayout({
   children,
@@ -52,12 +53,15 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-6 pt-20 lg:pt-6">{children}</main>
+    <>
+      <WebSocketEventListener />
+      <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
+        <Sidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6 pt-20 lg:pt-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

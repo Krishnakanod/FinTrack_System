@@ -119,10 +119,10 @@ export default function FriendsPage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50" data-testid="friends-heading">
             Friends
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400" data-testid="friends-subtitle">
             Manage your friends list
           </p>
         </div>
@@ -158,11 +158,13 @@ export default function FriendsPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSearch();
                 }}
+                data-testid="friend-search-email"
               />
             </div>
             <Button
               onClick={handleSearch}
               disabled={isSearching || !searchEmail.trim()}
+              data-testid="friend-search-button"
             >
               {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Search
@@ -173,7 +175,7 @@ export default function FriendsPage() {
           {searchDone && (
             <div className="mt-4">
               {searchResult ? (
-                <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800" data-testid="friend-search-result">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-lg dark:bg-zinc-800">
                       {searchResult.avatar_url ? (
@@ -200,6 +202,7 @@ export default function FriendsPage() {
                       addFriendMutation.isPending ||
                       friends.some((f) => f.id === searchResult.id)
                     }
+                    data-testid="add-friend-button"
                   >
                     <UserPlus className="mr-2 h-4 w-4" />
                     {friends.some((f) => f.id === searchResult.id)
@@ -208,7 +211,7 @@ export default function FriendsPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center justify-center rounded-lg border border-dashed border-zinc-300 py-8 text-center dark:border-zinc-700">
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-zinc-300 py-8 text-center dark:border-zinc-700" data-testid="friend-not-found">
                   <p className="text-sm text-zinc-500">
                     No user found with that email
                   </p>
@@ -222,7 +225,7 @@ export default function FriendsPage() {
       {/* Friends List */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2" data-testid="friends-list-title">
             <Users className="h-5 w-5" />
             Your Friends
           </CardTitle>
@@ -244,18 +247,19 @@ export default function FriendsPage() {
               </p>
             </div>
           ) : friends.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700" data-testid="no-friends-message">
               <UserX className="mb-2 h-8 w-8 text-zinc-400" />
               <p className="text-sm text-zinc-500">
                 No friends yet. Search for someone above!
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2" data-testid="friends-list">
               {friends.map((friend) => (
                 <div
                   key={friend.id}
                   className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                  data-testid="friend-row"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-lg font-medium dark:bg-zinc-800">
@@ -278,6 +282,7 @@ export default function FriendsPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveClick(friend)}
+                    data-testid="remove-friend-button"
                   >
                     <Trash2 className="h-4 w-4 text-red-500" />
                     <span className="ml-1 hidden sm:inline">Remove</span>

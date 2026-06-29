@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   timeout: 60000,
-  singleWorker: true,
+  fullyParallel: false,
+  workers: 1,
   use: {
     baseURL: 'http://localhost:3003',
     headless: true,

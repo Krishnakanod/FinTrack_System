@@ -14,12 +14,38 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage, IncomePage } from '../page-objects';
 
+const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000';
+const TEST_EMAIL = 'test@fintrack.com';
+const TEST_PASSWORD = 'TestPassword123';
+const FRIEND_USER_ID = '6a3fd64228f622c70898059a';
+
+async function getAuthToken(email: string, password: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.access_token ?? null;
+}
+
+async function ensureFriend(email: string, password: string, friendId: string) {
+  const token = await getAuthToken(email, password);
+  if (!token) return;
+  await fetch(`${API_BASE_URL}/api/v1/users/friends`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ friend_user_id: friendId }),
+  });
+}
+
 test.describe('Income CRUD', () => {
   let loginPage: LoginPage;
   let incomePage: IncomePage;
-
-  const testEmail = 'test@fintrack.com';
-  const testPassword = 'TestPassword123';
 
   test.beforeEach(async ({ page }) => {
     loginPage = new LoginPage(page);
@@ -27,8 +53,8 @@ test.describe('Income CRUD', () => {
 
     // Login
     await loginPage.goto();
-    await loginPage.login(testEmail, testPassword);
-    await page.waitForTimeout(2000);
+    await loginPage.login(TEST_EMAIL, TEST_PASSWORD);
+    await page.waitForURL(/\/dashboard/, { timeout: 20000 });
 
     // Navigate to income
     await incomePage.goto();
@@ -92,6 +118,11 @@ test.describe('Income CRUD', () => {
     });
 
     test('should create income from friend', async ({ page }) => {
+      // Ensure a friend exists for the dropdown
+      await ensureFriend(TEST_EMAIL, TEST_PASSWORD, FRIEND_USER_ID);
+      await page.reload();
+      await page.waitForURL(/\/dashboard\/income/, { timeout: 10000 });
+
       await incomePage.clickAddIncome();
 
       // Select "From Friend"

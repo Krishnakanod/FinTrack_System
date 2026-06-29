@@ -135,29 +135,55 @@ ws.onmessage = (e) => console.log("received:", e.data);
 
 ---
 
-## Handoff Notes (fill this out at the end of the sprint)
+## Handoff Notes
 
-```markdown
 ### Sprint 6 Handoff Notes
 
 **What was built:**
-- [fill in]
+
+Backend:
+- `backend/modules/users/models.py` — `Friendship` Beanie document with bidirectional query support
+- `backend/modules/users/schemas.py` — `UserProfileResponse`, `UserSearchResult`, `AddFriendRequest`, `FriendResponse`, `FriendsListResponse`
+- `backend/modules/users/service.py` — profile CRUD, search-by-email, add/list/remove friends (status always "accepted")
+- `backend/modules/users/router.py` — `/api/v1/users/me`, `/search`, `/friends`, `/friends/{friend_id}`
+- `backend/modules/websocket/manager.py` — singleton `ConnectionManager` with `connect`, `disconnect`, `broadcast`
+- `backend/modules/websocket/router.py` — JWT-authenticated `WS /ws/{user_id}` with 4000/4001 close codes
+- `backend/modules/notifications/models.py` — `Notification` Beanie document
+- `backend/modules/notifications/service.py` — `create_notification()` that persists to DB and broadcasts via WebSocket
+
+Frontend:
+- `frontend/lib/websocket.ts` — `useWebSocket()` hook with reconnect, fresh-token handling, and 30s "ping" heartbeat
+- `frontend/lib/store/websocket-store.ts` — Zustand store exposing `lastEvent` and `connectionStatus`
+- `frontend/app/dashboard/layout.tsx` — WebSocket hook wired in, auto-connects when authenticated
+- `frontend/app/dashboard/friends/page.tsx` — full friends UI: search by email, add, list, remove with confirmation
+- `frontend/app/dashboard/income/page.tsx` — "From Friend" source type now populates dropdown from `GET /api/v1/users/friends`
+
+Tests:
+- `tests/page-objects.ts` — added `FriendsPage` POM
+- `tests/tests/friends.spec.ts` — friends E2E spec
 
 **Decisions made (not already in TRD.md):**
-- [e.g., heartbeat/ping interval chosen, reconnect backoff strategy]
+
+- Friendships stored as a single document; listing checks both `requester_id` and `addressee_id`.
+- WebSocket store pattern: components watch `lastEvent` and filter by `type` rather than a pub/sub emitter.
+- Heartbeat payload: plain string `"ping"` sent every 30s.
+- Reconnect strategy: exponential backoff capped at ~32s; no auto-reconnect on close codes 4000/4001 (stale token).
+- `create_notification()` is the only public dispatch point — it persists and broadcasts in one call.
 
 **Known issues / deferred items:**
-- Notifications router (list/mark-read endpoints) deferred to Sprint 8 by design
-- [anything else]
+
+- `modules/notifications/router.py` (list/mark-read endpoints) deferred to Sprint 8 by design.
+- `tests/tests/friends.spec.ts` could not be verified passing in this session due to a local Playwright path/version resolution issue; the auth login test passed and the backend endpoints verified successfully via curl.
+- `Notification` model uses `metadata: dict = {}` default (safe under Pydantic v2).
 
 **What Sprint 7 needs to know:**
-- connection_manager import path: `from modules.websocket.manager import connection_manager`
-- notifications.service.create_notification() exact signature and import path
-- Friends list endpoint shape (for member-selection dropdowns in Groups UI)
-- Frontend websocket-store.ts shape — how Sprint 7's Groups page should subscribe to
-  GROUP_TRANSACTION events specifically
+
+- Import for broadcasts: `from modules.websocket.manager import connection_manager`
+- Import for notifications: `from modules.notifications.service import create_notification`
+- Friend list endpoint: `GET /api/v1/users/friends` returns `{ items: [{ id, name, email, avatar_url }] }` sorted alphabetically by `name`.
+- WebSocket store: subscribe to `lastEvent`; filter on `type === "GROUP_TRANSACTION"` for real-time group updates.
+- Frontend WS URL pattern: `${NEXT_PUBLIC_WS_URL}/ws/${userId}?token=${accessToken}`.
 
 **What Sprint 8 needs to know:**
-- modules/notifications/models.py Notification document shape is final — build router.py
-  (GET / and PUT /{id}/read, PUT /read-all) against it
-```
+
+- `modules/notifications/models.py` `Notification` document shape is final — build `router.py` (`GET /`, `PUT /{id}/read`, `PUT /read-all`) against it.
