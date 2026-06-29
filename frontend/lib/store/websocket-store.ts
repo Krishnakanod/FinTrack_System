@@ -22,9 +22,28 @@ export interface GroupTransactionPayload {
   actor_name: string;
 }
 
+export interface BudgetAlertPayload {
+  budget_id: string;
+  category: string;
+  period: string;
+  threshold: "80" | "100";
+  current_spend: number;
+  budget_amount: number;
+}
+
+export interface NotificationPayload {
+  id: string;
+  type: "group_transaction" | "budget_alert" | "income_received" | "expense_added";
+  title: string;
+  body: string;
+  is_read: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface WebSocketEvent {
   type: "GROUP_TRANSACTION" | "BUDGET_ALERT" | "NOTIFICATION";
-  payload: GroupTransactionPayload | Record<string, unknown>;
+  payload: GroupTransactionPayload | BudgetAlertPayload | NotificationPayload | Record<string, unknown>;
 }
 
 interface WebSocketState {

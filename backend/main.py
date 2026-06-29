@@ -11,13 +11,19 @@ from modules.income.router import router as income_router
 from modules.users.router import router as users_router
 from modules.websocket.router import router as websocket_router
 from modules.groups.router import router as groups_router
+from modules.notifications.router import router as notifications_router
+from modules.budgets.router import router as budgets_router
 
+
+from modules.budgets.scheduler import scheduler as budget_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     await database.init_db()
+    budget_scheduler.start()
     yield
+    budget_scheduler.shutdown()
     await database.close_db()
 
 
@@ -98,6 +104,8 @@ app.include_router(income_router)
 app.include_router(users_router)
 app.include_router(websocket_router)
 app.include_router(groups_router)
+app.include_router(notifications_router)
+app.include_router(budgets_router)
 
 
 @app.get("/health")

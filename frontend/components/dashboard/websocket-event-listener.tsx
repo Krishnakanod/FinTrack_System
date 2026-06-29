@@ -50,19 +50,16 @@ export function WebSocketEventListener() {
     }
 
     if (lastEvent.type === "NOTIFICATION") {
-      // Notifications are handled by the notifications bell in Sprint 8.
-      // For now, just ensure the balances and group data stay fresh.
-      if (
-        typeof lastEvent.payload === "object" &&
-        lastEvent.payload !== null
-      ) {
-        const p = lastEvent.payload as Record<string, unknown>;
-        const metadata = p.metadata as Record<string, string> | undefined;
-        if (metadata?.group_id) {
-          queryClient.invalidateQueries({
-            queryKey: ["groups", metadata.group_id, "transactions"],
+      // Invalidate notifications to update unread count in header
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+
+      // Show toast for budget alerts
+      if (lastEvent.payload && typeof lastEvent.payload === "object") {
+        const payload = lastEvent.payload as Record<string, unknown>;
+        if (payload.type === "budget_alert") {
+          toast.info(payload.title as string, {
+            description: payload.body as string,
           });
-          queryClient.invalidateQueries({ queryKey: ["balances"] });
         }
       }
     }

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     gmail_app_password: str
     google_vision_api_key: str
     cors_allowed_origins: str
+    budget_scheduler_interval_minutes: int = 10  # Check budgets every 5 minutes
 
     @property
     def cors_origins_list(self) -> List[str]:
