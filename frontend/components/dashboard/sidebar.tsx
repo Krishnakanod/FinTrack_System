@@ -26,9 +26,9 @@ const navItems = [
   { label: "Friends", href: "/dashboard/friends", icon: Users },
   { label: "Groups", href: "/dashboard/groups", icon: UsersRound },
   { label: "Balances", href: "/dashboard/balances", icon: Scale },
-  { label: "Budget", href: "/dashboard/budget", icon: Target, comingSoon: true },
+  { label: "Budget", href: "/dashboard/budget", icon: Target },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, comingSoon: true },
-  { label: "Notifications", href: "/dashboard/notifications", icon: Bell, comingSoon: true },
+  { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
 ];
 
 export function Sidebar() {

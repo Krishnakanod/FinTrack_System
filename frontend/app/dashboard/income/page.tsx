@@ -211,7 +211,9 @@ export default function IncomePage() {
       source_type: "salary",
       description: "",
       amount: "",
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().getFullYear() + '-' +
+            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+            String(new Date().getDate()).padStart(2, '0'),
       payment_type: "",
     },
   });
@@ -224,7 +226,9 @@ export default function IncomePage() {
       source_type: "salary",
       description: "",
       amount: "",
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().getFullYear() + '-' +
+            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+            String(new Date().getDate()).padStart(2, '0'),
       payment_type: "",
     });
     setSelectedFriendId("");

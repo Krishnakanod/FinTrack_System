@@ -11,10 +11,11 @@ from modules.income.models import Income
 from modules.users.models import Friendship
 from modules.notifications.models import Notification
 from modules.groups.models import Group, GroupTransaction, Balance
+from modules.budgets.models import Budget
 
 document_models: List[type[BaseModel]] = [
     User, OTP, RefreshToken, Expense, Income, Friendship, Notification,
-    Group, GroupTransaction, Balance,
+    Group, GroupTransaction, Balance, Budget,
 ]
 
 motor_client: AsyncIOMotorClient | None = None

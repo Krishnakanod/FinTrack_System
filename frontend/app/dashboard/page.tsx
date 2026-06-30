@@ -292,10 +292,10 @@ export default function DashboardPage() {
             <h3 className="font-medium">Add Income</h3>
             <p className="text-xs text-zinc-500">Record income sources</p>
           </a>
-          <div className="rounded-lg border border-zinc-200 p-4 opacity-50 dark:border-zinc-800">
+          <a href="/dashboard/groups" className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
             <h3 className="font-medium">Create Group</h3>
-            <p className="text-xs text-zinc-500">Coming soon</p>
-          </div>
+            <p className="text-xs text-zinc-500">Create Groups with Friends</p>
+          </a>
           <div className="rounded-lg border border-zinc-200 p-4 opacity-50 dark:border-zinc-800">
             <h3 className="font-medium">View Analytics</h3>
             <p className="text-xs text-zinc-500">Coming soon</p>
