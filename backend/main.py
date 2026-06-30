@@ -13,6 +13,8 @@ from modules.websocket.router import router as websocket_router
 from modules.groups.router import router as groups_router
 from modules.notifications.router import router as notifications_router
 from modules.budgets.router import router as budgets_router
+from modules.analytics.router import router as analytics_router, reports_router as reports_router
+
 
 
 from modules.budgets.scheduler import scheduler as budget_scheduler
@@ -106,7 +108,8 @@ app.include_router(websocket_router)
 app.include_router(groups_router)
 app.include_router(notifications_router)
 app.include_router(budgets_router)
-
+app.include_router(analytics_router)
+app.include_router(reports_router)
 
 @app.get("/health")
 async def health_check():

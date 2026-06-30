@@ -3,11 +3,12 @@
         "ANTHROPIC_API_KEY": "sk-ws-H.PXPYRP.0Yme.MEYCIQCzwvhfQTtMNeWbgkSN0kEcCUaA-E4zP0s-nw-McGfZ5QIhAJYCqR-YF4D-dQMuuqYdXN_qQY1WFXyDiY-agnCnISF6",
         "ANTHROPIC_AUTH_TOKEN": "sk-ws-H.PXPYRP.0Yme.MEYCIQCzwvhfQTtMNeWbgkSN0kEcCUaA-E4zP0s-nw-McGfZ5QIhAJYCqR-YF4D-dQMuuqYdXN_qQY1WFXyDiY-agnCnISF6",
         "ANTHROPIC_BASE_URL": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
-        "ANTHROPIC_MODEL": "qwen3-coder-flash-2025-07-28",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3-coder-flash-2025-07-28",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3-coder-flash-2025-07-28",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3-coder-flash-2025-07-28",
-        "CLAUDE_CODE_SUBAGENT_MODEL": "qwen3-coder-flash-2025-07-28"
+        "ANTHROPIC_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k2.7-code",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k2.7-code",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k2.7-code"
+
     },
     "enabledPlugins": {
     "superpowers@claude-plugins-official": true,

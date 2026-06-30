@@ -6,10 +6,9 @@ import { Loader2, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { listExpenses, type Expense } from "@/lib/api/expenses";
-import { listIncome, type Income } from "@/lib/api/income";
+import { getNetBalance, getRecentActivity, type ActivityItem } from "@/lib/api/analytics";
 
-// ===== Presentational Components (for Sprint 9 swap) =====
+// ===== Presentational Components (extracted in Sprint 5) =====
 
 export function NetBalanceCard({
   totalIncome,
@@ -77,43 +76,8 @@ export function TotalExpensesCard({ amount }: { amount: number }) {
   );
 }
 
-export function RecentActivityFeed({
-  expenses,
-  incomes,
-}: {
-  expenses: Expense[];
-  incomes: Income[];
-}) {
-  const recentActivity = useMemo(() => {
-    const combined = [
-      ...expenses.map((e) => ({
-        type: "expense" as const,
-        id: e.id,
-        title: e.category,
-        description: e.description || "No description",
-        amount: e.amount,
-        date: e.date,
-        payment_type: e.payment_type,
-        icon: getCategoryIcon(e.category),
-      })),
-      ...incomes.map((i) => ({
-        type: "income" as const,
-        id: i.id,
-        title: i.source_type === "salary" ? "Salary" : "From Friend",
-        description: i.description || "No description",
-        amount: i.amount,
-        date: i.date,
-        payment_type: i.payment_type,
-        icon: i.source_type === "salary" ? "💰" : "👥",
-      })),
-    ];
-
-    return combined
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10);
-  }, [expenses, incomes]);
-
-  if (recentActivity.length === 0) {
+export function RecentActivityFeed({ items }: { items: ActivityItem[] }) {
+  if (items.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -137,29 +101,30 @@ export function RecentActivityFeed({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {recentActivity.map((item) => (
+          {items.map((item) => (
             <div
               key={`${item.type}-${item.id}`}
               className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{item.icon}</span>
+                <span className="text-2xl">{getActivityIcon(item)}</span>
                 <div>
-                  <p className="font-medium">{item.title}</p>
+                  <p className="font-medium">{getActivityTitle(item)}</p>
                   <p className="text-xs text-zinc-500">
-                    {item.description} • {formatDate(item.date)}
+                    {item.description || "No description"} • {formatDate(item.date)}
+                    {item.group_name ? ` • ${item.group_name}` : ""}
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 <p
-                  className={`font-semibold ${item.type === "income" ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}
+                  className={`font-semibold ${item.direction === "in" ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}
                 >
-                  {item.type === "income" ? "+" : "-"}
+                  {item.direction === "in" ? "+" : "-"}
                   {formatCurrency(item.amount)}
                 </p>
                 <Badge variant="outline" className="text-xs">
-                  {item.payment_type}
+                  {item.type.replace("_", " ")}
                 </Badge>
               </div>
             </div>
@@ -190,47 +155,33 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function getCategoryIcon(category: string): string {
-  const icons: Record<string, string> = {
-    Food: "🍔",
-    Transport: "🚗",
-    Shopping: "🛍️",
-    Entertainment: "🎬",
-    Health: "💊",
-    Utilities: "💡",
-    Other: "📦",
-  };
-  return icons[category] || "📦";
+function getActivityIcon(item: ActivityItem): string {
+  if (item.type === "income") return "💰";
+  if (item.type === "group_transaction") return "👥";
+  return "🛒";
+}
+
+function getActivityTitle(item: ActivityItem): string {
+  if (item.type === "group_transaction" && item.group_name) {
+    return item.group_name;
+  }
+  return item.description || "Transaction";
 }
 
 // ===== Main Component =====
 
 export default function DashboardPage() {
-  // Fetch expenses and income
-  const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
-    queryKey: ["expenses"],
-    queryFn: () => listExpenses(),
+  const { data: netBalance, isLoading: isLoadingNetBalance } = useQuery({
+    queryKey: ["analytics", "net-balance"],
+    queryFn: () => getNetBalance(),
   });
 
-  const { data: incomeData, isLoading: isLoadingIncome } = useQuery({
-    queryKey: ["income"],
-    queryFn: () => listIncome(),
+  const { data: recentActivity, isLoading: isLoadingRecentActivity } = useQuery({
+    queryKey: ["analytics", "recent-activity", 10],
+    queryFn: () => getRecentActivity(10),
   });
 
-  const expenses = expensesData?.items ?? [];
-  const incomes = incomeData?.items ?? [];
-
-  const totalExpenses = useMemo(
-    () => expenses.reduce((sum, e) => sum + e.amount, 0),
-    [expenses]
-  );
-
-  const totalIncome = useMemo(
-    () => incomes.reduce((sum, i) => sum + i.amount, 0),
-    [incomes]
-  );
-
-  const isLoading = isLoadingExpenses || isLoadingIncome;
+  const isLoading = isLoadingNetBalance || isLoadingRecentActivity;
 
   if (isLoading) {
     return (
@@ -239,6 +190,10 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const totalIncome = netBalance?.total_income ?? 0;
+  const totalExpenses = netBalance?.total_expense ?? 0;
+  const recentItems = recentActivity?.items ?? [];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -263,19 +218,19 @@ export default function DashboardPage() {
               Transactions
             </CardDescription>
             <CardTitle className="text-3xl">
-              {expenses.length + incomes.length}
+              {recentItems.length}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-zinc-500">
-              {expenses.length} expenses, {incomes.length} income
+              Recent activity shown
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Recent Activity */}
-      <RecentActivityFeed expenses={expenses} incomes={incomes} />
+      <RecentActivityFeed items={recentItems} />
 
       {/* Quick Actions */}
       <Card>
@@ -296,10 +251,10 @@ export default function DashboardPage() {
             <h3 className="font-medium">Create Group</h3>
             <p className="text-xs text-zinc-500">Create Groups with Friends</p>
           </a>
-          <div className="rounded-lg border border-zinc-200 p-4 opacity-50 dark:border-zinc-800">
+          <a href="/dashboard/analytics" className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
             <h3 className="font-medium">View Analytics</h3>
-            <p className="text-xs text-zinc-500">Coming soon</p>
-          </div>
+            <p className="text-xs text-zinc-500">Detailed reports & charts</p>
+          </a>
         </CardContent>
       </Card>
     </div>
