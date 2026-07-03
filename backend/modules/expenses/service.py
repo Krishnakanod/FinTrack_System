@@ -1,6 +1,6 @@
 """Expense module — Business logic services."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -19,7 +19,7 @@ from modules.expenses.ocr import process_receipt
 
 async def create_expense(user_id: str, data: ExpenseCreate) -> Expense:
     """Create a new manual expense."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expense = Expense(
         user_id=user_id,
         category=data.category,
@@ -62,7 +62,7 @@ async def process_ocr(user_id: str, data: OcrUploadRequest) -> OcrResponse:
 
 async def confirm_ocr_expense(user_id: str, data: OcrConfirmRequest) -> Expense:
     """Save an OCR-parsed expense to the database."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expense = Expense(
         user_id=user_id,
         category=data.category,
@@ -97,9 +97,13 @@ async def list_expenses(
     if date_from or date_to:
         date_filter = {}
         if date_from:
-            date_filter["$gte"] = datetime.fromisoformat(date_from)
+            date_filter["$gte"] = datetime.fromisoformat(date_from).replace(
+                tzinfo=timezone.utc
+            )
         if date_to:
-            date_filter["$lte"] = datetime.fromisoformat(date_to)
+            date_filter["$lte"] = datetime.fromisoformat(date_to).replace(
+                tzinfo=timezone.utc
+            )
         query["date"] = date_filter
 
     expenses = await Expense.find(query).sort("-date").to_list()
@@ -129,7 +133,7 @@ async def update_expense(user_id: str, expense_id: str, data: ExpenseUpdate) -> 
     if update_data:
         for field, value in update_data.items():
             setattr(expense, field, value)
-        expense.updated_at = datetime.utcnow()
+        expense.updated_at = datetime.now(timezone.utc)
         await expense.save()
 
     return expense

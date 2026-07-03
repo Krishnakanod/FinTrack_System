@@ -65,6 +65,7 @@ import {
   type IncomeUpdateInput,
 } from "@/lib/api/income";
 import { listFriends, type FriendProfile } from "@/lib/api/friends";
+import { formatDateIST } from "@/lib/utils/format-date";
 import type { ApiError } from "@/lib/api/client";
 
 // ===== Form Schema =====
@@ -73,7 +74,9 @@ const incomeSchema = z.object({
   source_type: z.enum(["salary", "from_friend"]),
   description: z.string().optional(),
   amount: z.string().min(1, "Amount is required"),
-  date: z.string().min(1, "Date is required"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   payment_type: z.string().min(1, "Payment type is required"),
 });
 
@@ -91,11 +94,12 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+  return formatDateIST(dateStr, "date");
+}
+
+function getTodayIST(): string {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -132,25 +136,33 @@ export default function IncomePage() {
   });
   const friends = friendsData?.items ?? [];
 
+  const incomeSourceTypeFilter =
+    filterSourceType && filterSourceType !== "all" ? filterSourceType : undefined;
+
   // Fetch income
   const { data, isLoading } = useQuery({
     queryKey: [
       "income",
       {
-        source_type: filterSourceType,
-        date_from: filterDateFrom,
-        date_to: filterDateTo,
+        source_type: incomeSourceTypeFilter ?? null,
+        date_from: filterDateFrom ?? null,
+        date_to: filterDateTo ?? null,
       },
     ],
     queryFn: () =>
       listIncome({
-        source_type: filterSourceType || undefined,
+        source_type: incomeSourceTypeFilter,
         date_from: filterDateFrom || undefined,
         date_to: filterDateTo || undefined,
       }),
   });
 
   const incomes = data?.items ?? [];
+
+  const areFiltersActive =
+    (filterSourceType && filterSourceType !== "all") ||
+    Boolean(filterDateFrom) ||
+    Boolean(filterDateTo);
 
   // Mutations
   const createMutation = useMutation({
@@ -211,9 +223,7 @@ export default function IncomePage() {
       source_type: "salary",
       description: "",
       amount: "",
-      date: new Date().getFullYear() + '-' +
-            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
-            String(new Date().getDate()).padStart(2, '0'),
+      date: getTodayIST(),
       payment_type: "",
     },
   });
@@ -221,14 +231,26 @@ export default function IncomePage() {
   const watchedSourceType = watch("source_type");
   const watchedPaymentType = watch("payment_type");
 
+  function handleDateFromChange(value: string) {
+    setFilterDateFrom(value);
+    if (filterDateTo && value > filterDateTo) {
+      setFilterDateTo(value);
+    }
+  }
+
+  function handleDateToChange(value: string) {
+    setFilterDateTo(value);
+    if (filterDateFrom && value < filterDateFrom) {
+      setFilterDateFrom(value);
+    }
+  }
+
   function resetForm() {
     reset({
       source_type: "salary",
       description: "",
       amount: "",
-      date: new Date().getFullYear() + '-' +
-            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
-            String(new Date().getDate()).padStart(2, '0'),
+      date: getTodayIST(),
       payment_type: "",
     });
     setSelectedFriendId("");
@@ -239,7 +261,7 @@ export default function IncomePage() {
     setValue("source_type", income.source_type);
     setValue("description", income.description || "");
     setValue("amount", String(income.amount));
-    setValue("date", income.date);
+    setValue("date", income.date.split("T")[0]);
     setValue("payment_type", income.payment_type);
     if (income.friend_id) {
       setSelectedFriendId(income.friend_id);
@@ -345,7 +367,7 @@ export default function IncomePage() {
               <Input
                 type="date"
                 value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
+                onChange={(e) => handleDateFromChange(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -353,10 +375,13 @@ export default function IncomePage() {
               <Input
                 type="date"
                 value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
+                onChange={(e) => handleDateToChange(e.target.value)}
               />
             </div>
           </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            From date cannot be after To date.
+          </p>
         </CardContent>
       </Card>
 
@@ -370,14 +395,35 @@ export default function IncomePage() {
       ) : incomes.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-sm text-zinc-500">No income records found</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => setIsAddDialogOpen(true)}
-            >
-              Add your first income
-            </Button>
+            {areFiltersActive ? (
+              <>
+                <p className="text-sm text-zinc-500">
+                  No income entries match your current filters.
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setFilterSourceType("");
+                    setFilterDateFrom("");
+                    setFilterDateTo("");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500">No income records found</p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setIsAddDialogOpen(true)}
+                >
+                  Add your first income
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (

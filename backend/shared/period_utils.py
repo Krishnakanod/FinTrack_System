@@ -19,8 +19,9 @@ def now_in_ist() -> datetime:
 def get_period_anchor(period: str, reference_date: datetime | date) -> str:
     """Return the canonical string identifying the current instance of `period`.
 
-    Locked per Spec-08 §1.2:
+    Locked per Spec-08 §1.2 / Spec-09 §1.1:
     - daily:     "2026-06-20"  (YYYY-MM-DD)
+    - weekly:    "2026-W25"    (YYYY-W[week])
     - monthly:   "2026-06"     (YYYY-MM)
     - quarterly: "2026-Q2"     (YYYY-Q[1-4])
     - yearly:    "2026"        (YYYY)
@@ -34,6 +35,9 @@ def get_period_anchor(period: str, reference_date: datetime | date) -> str:
 
     if period == "daily":
         return d.strftime("%Y-%m-%d")
+    if period == "weekly":
+        iso_year, iso_week, _ = d.isocalendar()
+        return f"{iso_year}-W{iso_week:02d}"
     if period == "monthly":
         return d.strftime("%Y-%m")
     if period == "quarterly":
@@ -48,8 +52,9 @@ def get_period_anchor(period: str, reference_date: datetime | date) -> str:
 def get_period_range(period: str, reference_date: datetime) -> tuple[datetime, datetime]:
     """Return [start, end] datetimes in IST for the given period containing reference_date.
 
-    Locked per Spec-08 §1.3:
+    Locked per Spec-08 §1.3 and Spec-09 §1.1:
     - daily:     [today 00:00:00 IST, today 23:59:59.999999 IST]
+    - weekly:    [Monday 00:00:00 IST, Sunday 23:59:59.999999 IST]
     - monthly:   [1st of current month 00:00:00 IST, last day of current month 23:59:59.999999 IST]
     - quarterly: [1st day of current quarter 00:00:00 IST, last day of current quarter 23:59:59.999999 IST]
     - yearly:    [Jan 1 00:00:00 IST, Dec 31 23:59:59.999999 IST]
@@ -65,6 +70,12 @@ def get_period_range(period: str, reference_date: datetime) -> tuple[datetime, d
     if period == "daily":
         start = datetime.combine(d, datetime.min.time()).replace(tzinfo=IST)
         end = datetime.combine(d, datetime.max.time()).replace(tzinfo=IST)
+    elif period == "weekly":
+        # d.weekday() returns Monday=0 ... Sunday=6
+        monday = d - timedelta(days=d.weekday())
+        sunday = monday + timedelta(days=6)
+        start = datetime.combine(monday, datetime.min.time()).replace(tzinfo=IST)
+        end = datetime.combine(sunday, datetime.max.time()).replace(tzinfo=IST)
     elif period == "monthly":
         start = datetime.combine(date(year, month, 1), datetime.min.time()).replace(tzinfo=IST)
         if month == 12:

@@ -23,6 +23,7 @@ import {
   markAllNotificationsAsRead,
   type Notification,
 } from "@/lib/api/notifications";
+import { formatDateIST } from "@/lib/utils/format-date";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -105,8 +106,7 @@ export default function NotificationsPage() {
 
   const formatDate = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return formatDateIST(dateString, "datetime");
     } catch {
       return dateString;
     }

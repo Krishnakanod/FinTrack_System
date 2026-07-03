@@ -69,6 +69,7 @@ import {
   type OcrResult,
   type ExpenseUpdateInput,
 } from "@/lib/api/expenses";
+import { formatDateIST } from "@/lib/utils/format-date";
 import type { ApiError } from "@/lib/api/client";
 
 // ===== Form Schemas =====
@@ -77,7 +78,9 @@ const expenseSchema = z.object({
   category: z.string().min(1, "Category is required"),
   description: z.string().optional(),
   amount: z.string().min(1, "Amount is required"),
-  date: z.string().min(1, "Date is required"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   payment_type: z.string().min(1, "Payment type is required"),
 });
 
@@ -99,11 +102,12 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+  return formatDateIST(dateStr, "date");
+}
+
+function getTodayIST(): string {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -140,18 +144,33 @@ export default function ExpensesPage() {
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
 
+  const expenseCategoryFilter =
+    filterCategory && filterCategory !== "all" ? filterCategory : undefined;
+
   // Fetch expenses
   const { data, isLoading } = useQuery({
-    queryKey: ["expenses", { category: filterCategory, date_from: filterDateFrom, date_to: filterDateTo }],
+    queryKey: [
+      "expenses",
+      {
+        category: expenseCategoryFilter ?? null,
+        date_from: filterDateFrom ?? null,
+        date_to: filterDateTo ?? null,
+      },
+    ],
     queryFn: () =>
       listExpenses({
-        category: filterCategory || undefined,
+        category: expenseCategoryFilter,
         date_from: filterDateFrom || undefined,
         date_to: filterDateTo || undefined,
       }),
   });
 
   const expenses = data?.items ?? [];
+
+  const areFiltersActive =
+    (filterCategory && filterCategory !== "all") ||
+    Boolean(filterDateFrom) ||
+    Boolean(filterDateTo);
 
   // Mutations
   const createMutation = useMutation({
@@ -212,9 +231,7 @@ export default function ExpensesPage() {
       category: "",
       description: "",
       amount: "",
-      date: new Date().getFullYear() + '-' +
-            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
-            String(new Date().getDate()).padStart(2, '0'),
+      date: getTodayIST(),
       payment_type: "",
     },
   });
@@ -222,14 +239,26 @@ export default function ExpensesPage() {
   const watchedCategory = watch("category");
   const watchedPaymentType = watch("payment_type");
 
+  function handleDateFromChange(value: string) {
+    setFilterDateFrom(value);
+    if (filterDateTo && value > filterDateTo) {
+      setFilterDateTo(value);
+    }
+  }
+
+  function handleDateToChange(value: string) {
+    setFilterDateTo(value);
+    if (filterDateFrom && value < filterDateFrom) {
+      setFilterDateFrom(value);
+    }
+  }
+
   function resetForm() {
     reset({
       category: "",
       description: "",
       amount: "",
-      date: new Date().getFullYear() + '-' +
-            String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
-            String(new Date().getDate()).padStart(2, '0'),
+      date: getTodayIST(),
       payment_type: "",
     });
     setOcrResult(null);
@@ -240,7 +269,7 @@ export default function ExpensesPage() {
     setValue("category", expense.category);
     setValue("description", expense.description || "");
     setValue("amount", String(expense.amount));
-    setValue("date", expense.date);
+    setValue("date", expense.date.split("T")[0]);
     setValue("payment_type", expense.payment_type);
     setIsAddDialogOpen(true);
   }
@@ -405,7 +434,7 @@ export default function ExpensesPage() {
               <Input
                 type="date"
                 value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
+                onChange={(e) => handleDateFromChange(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -413,10 +442,13 @@ export default function ExpensesPage() {
               <Input
                 type="date"
                 value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
+                onChange={(e) => handleDateToChange(e.target.value)}
               />
             </div>
           </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            From date cannot be after To date.
+          </p>
         </CardContent>
       </Card>
 
@@ -430,14 +462,35 @@ export default function ExpensesPage() {
       ) : expenses.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-sm text-zinc-500">No expenses found</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => setIsAddDialogOpen(true)}
-            >
-              Add your first expense
-            </Button>
+            {areFiltersActive ? (
+              <>
+                <p className="text-sm text-zinc-500">
+                  No expenses match your current filters.
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setFilterCategory("");
+                    setFilterDateFrom("");
+                    setFilterDateTo("");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500">No expenses found</p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setIsAddDialogOpen(true)}
+                >
+                  Add your first expense
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
