@@ -7,6 +7,7 @@ import { Loader2, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getNetBalance, getRecentActivity, type ActivityItem } from "@/lib/api/analytics";
+import { formatDateIST } from "@/lib/utils/format-date";
 
 // ===== Presentational Components (extracted in Sprint 5) =====
 
@@ -147,12 +148,7 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatDateIST(dateStr, "date");
 }
 
 function getActivityIcon(item: ActivityItem): string {

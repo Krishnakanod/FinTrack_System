@@ -104,24 +104,23 @@ def _make_transaction_response(transaction: GroupTransaction) -> GroupTransactio
     )
 
 
-# ===== Equal-Split Algorithm (Locked per Spec-07 §1.4) =====
+# ===== Equal-Split Algorithm (Locked per Spec-07 §1.4, revised by Pre-Sprint-10) =====
 
 def _compute_equal_splits(total_amount: Decimal, split_among: list[str], paid_by: str) -> list[SplitResponse]:
-    """Compute equal split shares for all participants, then drop the payer.
+    """Compute equal split shares for ALL participants, including the payer.
 
-    The remainder is distributed 1 paisa at a time to the FIRST N members in the
-    `split_among` order who are NOT the payer, per Spec-07 §1.4.
+    The total is divided equally among every member in `split_among` (including the
+    payer). The payer's own share is stored in the transaction record but skipped
+    when updating balances. Remainder paise are distributed 1 at a time to the
+    first N members in the original `split_among` order.
     """
     n = len(split_among)
     total_paise = int((total_amount * 100).to_integral_value())
     base_paise = total_paise // n
     remainder_paise = total_paise % n
 
-    # Build ordered list of non-payer participants
-    non_payers = [uid for uid in split_among if uid != paid_by]
-
     splits: list[SplitResponse] = []
-    for idx, user_id in enumerate(non_payers):
+    for idx, user_id in enumerate(split_among):
         share_paise = base_paise + (1 if idx < remainder_paise else 0)
         amount = Decimal(share_paise) / Decimal("100")
         splits.append(SplitResponse(user_id=user_id, amount_owed=amount, is_settled=False))
@@ -329,7 +328,6 @@ async def add_transaction(
         stored_splits = [
             SplitResponse(user_id=entry.user_id, amount_owed=entry.amount_owed, is_settled=False)
             for entry in data.splits
-            if entry.user_id != data.paid_by
         ]
 
     now = datetime.now(timezone.utc)
@@ -394,6 +392,9 @@ async def _update_balances_for_transaction(transaction: GroupTransaction) -> Non
 
     for split in transaction.splits:
         debtor_id = split.user_id
+        # A person cannot owe themselves; skip self-balance records.
+        if debtor_id == paid_by:
+            continue
         amount = split.amount_owed
         amount_128 = Decimal128(amount)
         neg_amount_128 = Decimal128(-amount)

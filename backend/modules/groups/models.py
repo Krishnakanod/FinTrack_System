@@ -35,7 +35,8 @@ class Group(Document):
 class SplitEntry(BaseModel):
     """A single split entry inside a GroupTransaction.
 
-    Locked per Spec-07 §1.2: does NOT include the payer.
+    Per Pre-Sprint-10: can include the payer. The payer's own entry is stored for
+    record-keeping but does NOT create a balance record.
     """
 
     user_id: str
@@ -58,7 +59,7 @@ class GroupTransaction(Document):
     total_amount: Decimal
     paid_by: str = Indexed()  # user_id of payer
     split_type: Literal["equal", "custom"]
-    splits: list[SplitEntry]  # excludes paid_by per Spec-07 §1.2
+    splits: list[SplitEntry]  # includes all split participants, payer included
     date: datetime
     created_by: str  # user_id of submitter
     created_at: datetime

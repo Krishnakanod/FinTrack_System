@@ -54,6 +54,7 @@ class RecentActivityItem(BaseModel):
     amount: float
     date: str
     direction: Literal["in", "out"]
+    created_at: str | None = None
     group_id: str | None = None
     group_name: str | None = None
 

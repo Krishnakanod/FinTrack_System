@@ -21,6 +21,7 @@ import {
   type Notification,
 } from "@/lib/api/notifications";
 import { useWebSocketStore } from "@/lib/store/websocket-store";
+import { formatDateIST } from "@/lib/utils/format-date";
 
 export function Header() {
   const router = useRouter();
@@ -204,12 +205,7 @@ export function Header() {
                       {notification.body}
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-2">
-                      {new Date(notification.created_at).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatDateIST(notification.created_at, "datetime")}
                     </p>
                   </div>
                 ))}

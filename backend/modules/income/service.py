@@ -1,6 +1,6 @@
 """Income module — Business logic services."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from modules.income.models import Income
@@ -19,7 +19,7 @@ async def create_income(user_id: str, data: IncomeCreate) -> Income:
         amount=data.amount,
         date=data.date,
         payment_type=data.payment_type,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     await income.insert()
     return income
@@ -42,9 +42,13 @@ async def list_income(
     if date_from or date_to:
         date_filter = {}
         if date_from:
-            date_filter["$gte"] = datetime.fromisoformat(date_from)
+            date_filter["$gte"] = datetime.fromisoformat(date_from).replace(
+                tzinfo=timezone.utc
+            )
         if date_to:
-            date_filter["$lte"] = datetime.fromisoformat(date_to)
+            date_filter["$lte"] = datetime.fromisoformat(date_to).replace(
+                tzinfo=timezone.utc
+            )
         query["date"] = date_filter
 
     incomes = await Income.find(query).sort("-date").to_list()

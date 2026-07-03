@@ -1,6 +1,6 @@
 """Auth module - Business logic services."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from modules.auth.models import User, OTP, RefreshToken
 from modules.auth.schemas import (
@@ -54,7 +54,7 @@ async def signup(data: SignupRequest) -> str:
     otp = security.generate_otp()
     otp_hash = security.hash_otp(otp)
 
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
 
     if existing_user:
         # Re-attempt signup on unverified user: update credentials
@@ -124,8 +124,11 @@ async def verify_otp(data: VerifyOtpRequest) -> tuple[dict, dict, str]:
     if not otp_record:
         raise InvalidOtpError()
 
-    # Check expiry (both sides naive — UTC timestamps from MongoDB are offset-naive)
-    if datetime.utcnow() > otp_record.expires_at:
+    # Check expiry (treat stored naive datetimes as UTC)
+    expires_at = otp_record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
         await otp_record.delete()
         raise InvalidOtpError()
 
@@ -161,7 +164,7 @@ async def verify_otp(data: VerifyOtpRequest) -> tuple[dict, dict, str]:
     await RefreshToken(
         user_id=str(user.id),
         token_hash=security.hash_otp_simple(refresh_token),
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     ).insert()
 
     # Build responses
@@ -207,9 +210,12 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
     if not user:
         raise InvalidCredentialsError()
 
-    # Check if account is locked (naive UTC — MongoDB returns naive datetimes)
-    now_utc = datetime.utcnow()
-    if user.locked_until and user.locked_until > now_utc:
+    # Check if account is locked (treat stored naive datetimes as UTC)
+    now_utc = datetime.now(timezone.utc)
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if locked_until and locked_until > now_utc:
         raise AccountLockedError(user.locked_until)
 
     # Verify password
@@ -245,7 +251,7 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
     await RefreshToken(
         user_id=str(user.id),
         token_hash=security.hash_otp_simple(refresh_token),
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     ).insert()
 
     # Build responses
@@ -284,7 +290,7 @@ async def resend_otp(email: str, purpose: str) -> str:
     # Generate new OTP
     otp = security.generate_otp()
     otp_hash = security.hash_otp(otp)
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
 
     # Delete any existing OTP for this email+purpose (invalidates old OTP)
     await OTP.find(
@@ -333,7 +339,7 @@ async def forgot_password(data: ForgotPasswordRequest) -> str:
     if user:
         otp = security.generate_otp()
         otp_hash = security.hash_otp(otp)
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(timezone.utc)
 
          # Delete any existing OTP for forgot_password purpose
         await OTP.find(
@@ -394,8 +400,11 @@ async def reset_password(data: ResetPasswordRequest) -> str:
     if not otp_record:
         raise InvalidOtpError()
 
-    # Check expiry (both sides naive — MongoDB stores naive datetimes)
-    if datetime.utcnow() > otp_record.expires_at:
+    # Check expiry (treat stored naive datetimes as UTC)
+    expires_at = otp_record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
         await otp_record.delete()
         raise InvalidOtpError()
 

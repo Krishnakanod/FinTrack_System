@@ -6,15 +6,16 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  AlertCircle,
   ArrowLeft,
+  Check,
   Loader2,
+  Pencil,
   Plus,
   Receipt,
-  Users,
-  Wallet,
   Scale,
-  Check,
-  AlertCircle,
+  Users,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,12 +45,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { formatDateIST } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import {
   getGroup,
   listGroupTransactions,
   addTransaction,
+  updateGroup,
   type Group,
   type GroupTransaction,
   type MemberProfile,
@@ -62,6 +66,12 @@ interface MemberWithShare extends MemberProfile {
   share: number;
 }
 
+function getTodayIST(): string {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+}
+
 function formatCurrency(amount: number): string {
   return `₹${amount.toFixed(2)}`;
 }
@@ -69,21 +79,14 @@ function formatCurrency(amount: number): string {
 function computeEqualShares(
   members: MemberProfile[],
   totalAmount: number,
-  paidById: string,
 ): MemberWithShare[] {
-  const splitAmong = members.map((m) => m.id);
-  const n = splitAmong.length;
+  const n = members.length;
   const totalPaise = Math.round(totalAmount * 100);
   const basePaise = Math.floor(totalPaise / n);
   const remainderPaise = totalPaise - basePaise * n;
 
   return members.map((m, idx) => {
-    if (m.id === paidById) {
-      return { ...m, share: 0 };
-    }
-    const originalIdx = members.findIndex((member) => member.id === m.id);
-    const sharePaise =
-      basePaise + (originalIdx < remainderPaise ? 1 : 0);
+    const sharePaise = basePaise + (idx < remainderPaise ? 1 : 0);
     return { ...m, share: sharePaise / 100 };
   });
 }
@@ -103,6 +106,10 @@ export default function GroupDetailPage() {
     new Set(),
   );
   const [customShares, setCustomShares] = useState<Record<string, string>>({});
+  const [selectedTransaction, setSelectedTransaction] = useState<GroupTransaction | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [nameError, setNameError] = useState("");
 
   const { data: group, isLoading: isGroupLoading } = useQuery({
     queryKey: ["groups", groupId],
@@ -153,7 +160,7 @@ export default function GroupDetailPage() {
   const equalShares = useMemo(() => {
     const total = parseFloat(amount || "0");
     if (!total || selectedMembers.length === 0 || !paidBy) return [];
-    return computeEqualShares(selectedMembers, total, paidBy);
+    return computeEqualShares(selectedMembers, total);
   }, [amount, selectedMembers, paidBy]);
 
   const customTotal = useMemo(() => {
@@ -239,23 +246,20 @@ export default function GroupDetailPage() {
         paid_by: paidBy,
         split_type: "equal",
         split_among: selectedMembers.map((m) => m.id),
-        date: new Date().toISOString().split("T")[0],
+        date: getTodayIST(),
       });
     } else {
-      const splits = selectedMembers
-        .filter((m) => m.id !== paidBy)
-        .map((m) => ({
-          user_id: m.id,
-          amount_owed: parseFloat(customShares[m.id] || "0"),
-        }))
-        .filter((s) => s.amount_owed > 0);
+      const splits = selectedMembers.map((m) => ({
+        user_id: m.id,
+        amount_owed: parseFloat(customShares[m.id] || "0"),
+      }));
       addTransactionMutation.mutate({
         amount: total,
         description: description.trim(),
         paid_by: paidBy,
         split_type: "custom",
         splits,
-        date: new Date().toISOString().split("T")[0],
+        date: getTodayIST(),
       });
     }
   }
@@ -289,11 +293,74 @@ export default function GroupDetailPage() {
             Back
           </Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            {group.name}
-          </h1>
-          {group.description && (
+        <div className="flex-1">
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editedName}
+                onChange={(e) => {
+                  setEditedName(e.target.value);
+                  setNameError("");
+                }}
+                className={nameError ? "border-red-500" : ""}
+                autoFocus
+              />
+              <Button
+                size="sm"
+                onClick={async () => {
+                  const trimmed = editedName.trim();
+                  if (!trimmed) {
+                    setNameError("Group name cannot be empty");
+                    return;
+                  }
+                  try {
+                    await updateGroup(groupId, { name: trimmed });
+                    queryClient.invalidateQueries({
+                      queryKey: ["groups", groupId],
+                    });
+                    setIsEditingName(false);
+                    setNameError("");
+                    toast.success("Group name updated");
+                  } catch (error: any) {
+                    toast.error(error.message || "Failed to update group name");
+                  }
+                }}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditingName(false);
+                  setEditedName(group.name);
+                  setNameError("");
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {group.name}
+              </h1>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setEditedName(group.name);
+                  setIsEditingName(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {nameError && (
+            <p className="text-sm text-red-500">{nameError}</p>
+          )}
+          {group.description && !isEditingName && (
             <p className="text-sm text-zinc-500">{group.description}</p>
           )}
         </div>
@@ -347,7 +414,7 @@ export default function GroupDetailPage() {
                         <Input
                           id="date"
                           type="date"
-                          value={new Date().toISOString().split("T")[0]}
+                          value={getTodayIST()}
                           disabled
                         />
                       </div>
@@ -481,7 +548,8 @@ export default function GroupDetailPage() {
                               className="flex items-center justify-between text-sm"
                             >
                               <span>
-                                {m.name} {m.id === paidBy ? "(payer)" : ""}
+                                {m.name}{" "}
+                                {m.id === paidBy ? "(Paid by)" : ""}
                               </span>
                               <span className="font-medium">
                                 {m.share > 0
@@ -503,7 +571,12 @@ export default function GroupDetailPage() {
                             className="flex items-center gap-2"
                           >
                             <span className="w-1/3 text-sm truncate">
-                              {m.name}
+                              {m.name}{" "}
+                              {m.id === paidBy && (
+                                <span className="text-xs text-zinc-500">
+                                  (Paid by)
+                                </span>
+                              )}
                             </span>
                             <Input
                               type="number"
@@ -573,14 +646,15 @@ export default function GroupDetailPage() {
                   {transactions.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
+                      className="flex cursor-pointer items-center justify-between rounded-lg border border-zinc-200 p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
                       data-testid="transaction-item"
+                      onClick={() => setSelectedTransaction(t)}
                     >
                       <div>
                         <p className="font-medium">{t.description}</p>
                         <p className="text-xs text-zinc-500">
                           Paid by {getMemberName(t.paid_by)} •{" "}
-                          {new Date(t.date).toLocaleDateString()}
+                          {formatDateIST(t.date, "date")}
                         </p>
                       </div>
                       <div className="text-right">
@@ -652,6 +726,70 @@ export default function GroupDetailPage() {
           </Card>
         </div>
       </div>
+      {/* Transaction Detail Modal */}
+      <Dialog
+        open={!!selectedTransaction}
+        onOpenChange={(open) => !open && setSelectedTransaction(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{selectedTransaction?.description}</DialogTitle>
+            <DialogDescription>Transaction details</DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-500">Amount</span>
+                <span className="text-lg font-bold">
+                  {formatCurrency(selectedTransaction.total_amount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-500">Date</span>
+                <span>{formatDateIST(selectedTransaction.date, "date")}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-500">Paid by</span>
+                <span>{getMemberName(selectedTransaction.paid_by)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-500">Split type</span>
+                <span className="capitalize">
+                  {selectedTransaction.split_type}
+                </span>
+              </div>
+              <div className="space-y-2">
+                <span className="text-sm text-zinc-500">Splits</span>
+                <div className="space-y-2">
+                  {selectedTransaction.splits.map((split) => (
+                    <div
+                      key={split.user_id}
+                      className="flex items-center justify-between rounded-lg border border-zinc-200 p-2 dark:border-zinc-800"
+                    >
+                      <span>
+                        {getMemberName(split.user_id)}{" "}
+                        {split.user_id === currentUser?.id && (
+                          <span className="text-xs text-zinc-500">(you)</span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {formatCurrency(split.amount_owed)}
+                        </span>
+                        {split.is_settled ? (
+                          <Badge variant="secondary">Settled</Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

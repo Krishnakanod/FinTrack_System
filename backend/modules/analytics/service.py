@@ -4,8 +4,9 @@ Locked per Spec-09 §1.2 and §1.3.
 """
 
 from datetime import date as dt_date
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from operator import attrgetter
 from typing import Any
 
 from beanie import PydanticObjectId
@@ -183,6 +184,7 @@ async def get_recent_activity(user_id: str, limit: int = 10) -> RecentActivityRe
                 amount=decimal_to_float(expense.amount),
                 date=expense.date.isoformat(),
                 direction="out",
+                created_at=expense.created_at.isoformat(),
             )
         )
 
@@ -195,6 +197,7 @@ async def get_recent_activity(user_id: str, limit: int = 10) -> RecentActivityRe
                 amount=decimal_to_float(income.amount),
                 date=income.date.isoformat(),
                 direction="in",
+                created_at=income.created_at.isoformat(),
             )
         )
 
@@ -210,12 +213,27 @@ async def get_recent_activity(user_id: str, limit: int = 10) -> RecentActivityRe
                     amount=decimal_to_float(owed.amount_owed),
                     date=gt.date.isoformat(),
                     direction="out",
+                    created_at=gt.created_at.isoformat(),
                     group_id=gt.group_id,
                     group_name=group.name if group else None,
                 )
             )
 
-    items.sort(key=lambda x: x.date, reverse=True)
+    def _sort_key(item: RecentActivityItem) -> datetime:
+        # date is an UTC ISO 8601 string; parse and ensure timezone-aware
+        dt = datetime.fromisoformat(item.date)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    # Primary: date descending; secondary: created_at descending
+    items.sort(
+        key=lambda item: (
+            _sort_key(item),
+            datetime.fromisoformat(item.created_at) if item.created_at else datetime.min.replace(tzinfo=timezone.utc),
+        ),
+        reverse=True,
+    )
     return RecentActivityResponse(items=items[:limit])
 
 
@@ -223,8 +241,12 @@ async def get_recent_activity(user_id: str, limit: int = 10) -> RecentActivityRe
 
 async def generate_report_data(user_id: str, start_date: dt_date, end_date: dt_date) -> dict[str, Any]:
     """Gather all data needed for PDF/Excel reports."""
-    start_dt = datetime.combine(start_date, datetime.min.time())
-    end_dt = datetime.combine(end_date, datetime.max.time())
+    start_dt = datetime.combine(start_date, datetime.min.time()).replace(
+        tzinfo=timezone.utc
+    )
+    end_dt = datetime.combine(end_date, datetime.max.time()).replace(
+        tzinfo=timezone.utc
+    )
 
     # Expenses
     expenses = await Expense.find(

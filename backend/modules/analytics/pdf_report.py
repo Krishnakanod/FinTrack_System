@@ -3,7 +3,7 @@
 Locked structure per Spec-09 §1.4.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from io import BytesIO
 
@@ -46,7 +46,7 @@ def generate_pdf_report(data: dict, user_id: str) -> bytes:
     )
     story.append(Paragraph("FinTrack Financial Report", title_style))
     story.append(Paragraph(f"Date range: {data['start_date']} to {data['end_date']}", styles["Normal"]))
-    story.append(Paragraph(f"Generated on: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", styles["Normal"]))
+    story.append(Paragraph(f"Generated on: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles["Normal"]))
     story.append(Spacer(1, 0.2 * inch))
 
     # Expenses
