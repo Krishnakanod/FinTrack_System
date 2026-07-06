@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Upload, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Loader2, AlertTriangle, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DateRangePicker, isDateRangeValid } from "@/components/ui/date-range-picker";
+import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal";
+import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
 import {
   listExpenses,
   createExpense,
@@ -130,15 +133,18 @@ export default function ExpensesPage() {
   const queryClient = useQueryClient();
 
   // Filter state
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<string>("");
+  const [filterPaymentType, setFilterPaymentType] = useState<string>("");
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
 
   // Dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+
+  const { confirm, ConfirmModal } = useConfirmModal();
 
   // OCR state
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
@@ -146,6 +152,8 @@ export default function ExpensesPage() {
 
   const expenseCategoryFilter =
     filterCategory && filterCategory !== "all" ? filterCategory : undefined;
+  const expensePaymentTypeFilter =
+    filterPaymentType && filterPaymentType !== "all" ? filterPaymentType : undefined;
 
   // Fetch expenses
   const { data, isLoading } = useQuery({
@@ -153,6 +161,7 @@ export default function ExpensesPage() {
       "expenses",
       {
         category: expenseCategoryFilter ?? null,
+        payment_type: expensePaymentTypeFilter ?? null,
         date_from: filterDateFrom ?? null,
         date_to: filterDateTo ?? null,
       },
@@ -160,17 +169,31 @@ export default function ExpensesPage() {
     queryFn: () =>
       listExpenses({
         category: expenseCategoryFilter,
+        payment_type: expensePaymentTypeFilter,
         date_from: filterDateFrom || undefined,
         date_to: filterDateTo || undefined,
       }),
   });
 
-  const expenses = data?.items ?? [];
+  const rawExpenses = data?.items ?? [];
+
+  const filteredExpenses = rawExpenses.filter((expense) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      expense.description?.toLowerCase().includes(query) ||
+      expense.category.toLowerCase().includes(query)
+    );
+  });
+
+  const expenses = filteredExpenses;
 
   const areFiltersActive =
     (filterCategory && filterCategory !== "all") ||
+    (filterPaymentType && filterPaymentType !== "all") ||
     Boolean(filterDateFrom) ||
-    Boolean(filterDateTo);
+    Boolean(filterDateTo) ||
+    Boolean(searchQuery);
 
   // Mutations
   const createMutation = useMutation({
@@ -209,8 +232,6 @@ export default function ExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
       toast.success("Expense deleted successfully");
-      setIsDeleteDialogOpen(false);
-      setDeletingExpense(null);
     },
     onError: (error: ApiError) => {
       toast.error(error.message || "Failed to delete expense");
@@ -239,18 +260,12 @@ export default function ExpensesPage() {
   const watchedCategory = watch("category");
   const watchedPaymentType = watch("payment_type");
 
-  function handleDateFromChange(value: string) {
-    setFilterDateFrom(value);
-    if (filterDateTo && value > filterDateTo) {
-      setFilterDateTo(value);
-    }
-  }
-
-  function handleDateToChange(value: string) {
-    setFilterDateTo(value);
-    if (filterDateFrom && value < filterDateFrom) {
-      setFilterDateFrom(value);
-    }
+  function handleClearFilters() {
+    setSearchQuery("");
+    setFilterCategory("");
+    setFilterPaymentType("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
   }
 
   function resetForm() {
@@ -264,7 +279,13 @@ export default function ExpensesPage() {
     setOcrResult(null);
   }
 
-  function handleEdit(expense: Expense) {
+  async function handleEdit(expense: Expense) {
+    const confirmed = await confirm({
+      message: "You are about to edit this expense.",
+      confirmLabel: "Edit",
+    });
+    if (!confirmed) return;
+
     setEditingExpense(expense);
     setValue("category", expense.category);
     setValue("description", expense.description || "");
@@ -274,9 +295,15 @@ export default function ExpensesPage() {
     setIsAddDialogOpen(true);
   }
 
-  function handleDelete(expense: Expense) {
-    setDeletingExpense(expense);
-    setIsDeleteDialogOpen(true);
+  async function handleDelete(expense: Expense) {
+    const confirmed = await confirm({
+      message: "This expense will be permanently deleted.",
+      confirmLabel: "Delete",
+      confirmVariant: "destructive",
+    });
+    if (!confirmed) return;
+
+    deleteMutation.mutate(expense.id);
   }
 
   function onSubmit(data: ExpenseFormValues) {
@@ -409,7 +436,20 @@ export default function ExpensesPage() {
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="search">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  id="search"
+                  placeholder="Search expenses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Category</Label>
               <Select
@@ -430,25 +470,46 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>From Date</Label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => handleDateFromChange(e.target.value)}
-              />
+              <Label>Payment Type</Label>
+              <Select
+                value={filterPaymentType}
+                onValueChange={setFilterPaymentType}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All payment types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All payment types</SelectItem>
+                  {PAYMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
-              <Label>To Date</Label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => handleDateToChange(e.target.value)}
+              <div className="flex items-center justify-between">
+                {areFiltersActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="h-auto py-0 text-xs text-zinc-500 hover:text-zinc-900"
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+              <DateRangePicker
+                from={filterDateFrom}
+                to={filterDateTo}
+                onFromChange={setFilterDateFrom}
+                onToChange={setFilterDateTo}
               />
             </div>
           </div>
-          <p className="mt-2 text-xs text-zinc-500">
-            From date cannot be after To date.
-          </p>
         </CardContent>
       </Card>
 
@@ -465,16 +526,14 @@ export default function ExpensesPage() {
             {areFiltersActive ? (
               <>
                 <p className="text-sm text-zinc-500">
-                  No expenses match your current filters.
+                  {searchQuery.trim() && !areFiltersActive
+                    ? "No expenses match your search."
+                    : "No expenses match your current filters."}
                 </p>
                 <Button
                   variant="outline"
                   className="mt-4"
-                  onClick={() => {
-                    setFilterCategory("");
-                    setFilterDateFrom("");
-                    setFilterDateTo("");
-                  }}
+                  onClick={handleClearFilters}
                 >
                   Clear filters
                 </Button>
@@ -512,7 +571,11 @@ export default function ExpensesPage() {
                 </TableHeader>
                 <TableBody>
                   {expenses.map((expense) => (
-                    <TableRow key={expense.id}>
+                    <TableRow
+                      key={expense.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedExpense(expense)}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span>{getCategoryIcon(expense.category)}</span>
@@ -539,14 +602,20 @@ export default function ExpensesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(expense)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(expense);
+                            }}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(expense)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(expense);
+                            }}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -562,7 +631,11 @@ export default function ExpensesPage() {
           {/* Mobile Card View */}
           <div className="space-y-3 md:hidden">
             {expenses.map((expense) => (
-              <Card key={expense.id}>
+              <Card
+                key={expense.id}
+                className="cursor-pointer"
+                onClick={() => setSelectedExpense(expense)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -602,14 +675,20 @@ export default function ExpensesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEdit(expense)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(expense);
+                        }}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(expense)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(expense);
+                        }}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
@@ -806,48 +885,13 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Expense</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this expense? This action cannot be undone.
-              {deletingExpense && (
-                <div className="mt-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
-                  <p className="font-medium">{deletingExpense.category}</p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {formatCurrency(deletingExpense.amount)} • {formatDate(deletingExpense.date)}
-                  </p>
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setIsDeleteDialogOpen(false);
-                setDeletingExpense(null);
-              }}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (deletingExpense) {
-                  deleteMutation.mutate(deletingExpense.id);
-                }
-              }}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <TransactionDetailModal
+        transaction={selectedExpense}
+        type="expense"
+        open={!!selectedExpense}
+        onOpenChange={(open) => !open && setSelectedExpense(null)}
+      />
+      <ConfirmModal />
     </div>
   );
 }

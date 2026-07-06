@@ -13,6 +13,76 @@ export interface DateRange {
   end: string;
 }
 
+export interface PersonalSummary {
+  total_expenses: number;
+  total_income: number;
+  net_balance: number;
+  savings_rate: number | null;
+}
+
+export interface IncomeExpenseBucket {
+  label: string;
+  income: number;
+  expense: number;
+}
+
+export interface TrendBucket {
+  label: string;
+  amount: number;
+}
+
+export interface PaymentTypeBreakdown {
+  payment_type: string;
+  total_amount: number;
+  percentage: number;
+}
+
+export interface TopCategory {
+  rank: number;
+  category: string;
+  total_amount: number;
+}
+
+export interface PersonalAnalyticsResponse {
+  period: AnalyticsPeriod;
+  range: DateRange;
+  summary: PersonalSummary;
+  income_vs_expense: IncomeExpenseBucket[];
+  spending_trend: TrendBucket[];
+  payment_type_breakdown: PaymentTypeBreakdown[];
+  top_categories: TopCategory[];
+  recent_activity: ActivityItem[];
+}
+
+export interface MemberContribution {
+  member_id: string;
+  member_name: string;
+  paid: number;
+  owed: number;
+}
+
+export interface UnsettledSettledItem {
+  label: string;
+  amount: number;
+}
+
+export interface GroupSummary {
+  total_spend: number;
+  your_contribution: number;
+  unsettled_amount: number;
+  settled_amount: number;
+}
+
+export interface GroupAnalyticsResponse {
+  period: AnalyticsPeriod;
+  range: DateRange;
+  summary: GroupSummary;
+  unsettled_vs_settled: UnsettledSettledItem[];
+  per_member_contribution: MemberContribution[];
+  spending_trend: TrendBucket[];
+  recent_activity: ActivityItem[];
+}
+
 export interface BreakdownItem {
   category?: string;
   source_type?: string;
@@ -55,6 +125,39 @@ export interface ReportDownloadInput {
 }
 
 // ===== API Functions =====
+
+export async function getPersonalAnalytics(
+  period: AnalyticsPeriod,
+): Promise<PersonalAnalyticsResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/analytics/personal?period=${period}`,
+    {
+      headers: {
+        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
+      },
+      credentials: "include",
+    },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function getGroupAnalytics(
+  groupId: string,
+  period: AnalyticsPeriod,
+): Promise<GroupAnalyticsResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/analytics/group?group_id=${groupId}&period=${period}`,
+    {
+      headers: {
+        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
+      },
+      credentials: "include",
+    },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
 
 export async function getExpenseBreakdown(
   period: AnalyticsPeriod,

@@ -70,13 +70,15 @@ def _make_member_profile(user: User) -> MemberProfile:
     )
 
 
-def _make_group_response(group: Group) -> GroupResponse:
+async def _make_group_response(group: Group) -> GroupResponse:
     # members are stored as IDs; need to populate asynchronously by caller
+    creator = await _get_user_public_info(group.created_by)
     return GroupResponse(
         id=str(group.id),
         name=group.name,
         description=group.description,
         created_by=group.created_by,
+        created_by_name=creator.name if creator else "Unknown",
         members=[],  # populated by caller
         created_at=group.created_at.isoformat(),
     )
@@ -150,7 +152,7 @@ async def create_group(user_id: str, data: GroupCreate) -> GroupResponse:
     )
     await group.insert()
 
-    response = _make_group_response(group)
+    response = await _make_group_response(group)
     response.members = await _member_profiles_from_ids(member_ids)
     return response
 
@@ -167,7 +169,7 @@ async def get_group(user_id: str, group_id: str) -> GroupResponse:
     if user_id not in group.members:
         raise ValueError("NOT_A_MEMBER")
 
-    response = _make_group_response(group)
+    response = await _make_group_response(group)
     response.members = await _member_profiles_from_ids(group.members)
     return response
 
@@ -177,14 +179,14 @@ async def list_groups(user_id: str) -> list[GroupResponse]:
     groups = await Group.find({"members": user_id}).to_list()
     responses = []
     for group in groups:
-        response = _make_group_response(group)
+        response = await _make_group_response(group)
         response.members = await _member_profiles_from_ids(group.members)
         responses.append(response)
     return responses
 
 
 async def update_group(user_id: str, group_id: str, data: GroupUpdate) -> GroupResponse:
-    """Update group name/description. Only members can update."""
+    """Update group name/description. Only the creator can change the name."""
     try:
         group = await Group.get(PydanticObjectId(group_id))
     except Exception:
@@ -195,14 +197,36 @@ async def update_group(user_id: str, group_id: str, data: GroupUpdate) -> GroupR
     if user_id not in group.members:
         raise ValueError("NOT_A_MEMBER")
 
+    old_name = group.name
+    name_changed = False
+
     if data.name is not None:
-        group.name = data.name
+        if group.created_by != user_id:
+            raise ValueError("NOT_AUTHORIZED")
+        name = data.name.strip()
+        if len(name) < 3 or len(name) > 50:
+            raise ValueError("INVALID_NAME_LENGTH")
+        group.name = name
+        name_changed = True
     if data.description is not None:
         group.description = data.description or None
 
     await group.save()
 
-    response = _make_group_response(group)
+    if name_changed:
+        actor = await _get_user_public_info(user_id)
+        for member_id in group.members:
+            if member_id == user_id:
+                continue
+            await create_notification(
+                user_id=member_id,
+                type="group_transaction",
+                title="Group Renamed",
+                body=f"{actor.name if actor else 'Someone'} renamed the group to '{group.name}'",
+                metadata={"group_id": group_id},
+            )
+
+    response = await _make_group_response(group)
     response.members = await _member_profiles_from_ids(group.members)
     return response
 
@@ -237,7 +261,7 @@ async def add_member(user_id: str, group_id: str, data: AddMemberRequest) -> Gro
     group.members.append(new_member_id)
     await group.save()
 
-    response = _make_group_response(group)
+    response = await _make_group_response(group)
     response.members = await _member_profiles_from_ids(group.members)
     return response
 
@@ -420,6 +444,195 @@ async def _update_balances_for_transaction(transaction: GroupTransaction) -> Non
         )
 
 
+async def _reverse_balances_for_transaction(transaction: GroupTransaction) -> None:
+    """Reverse the balance effects of a transaction (used for edit/delete)."""
+    paid_by = transaction.paid_by
+    updated_at = datetime.now(timezone.utc)
+    balance_collection = Balance.get_motor_collection()
+
+    for split in transaction.splits:
+        debtor_id = split.user_id
+        if debtor_id == paid_by:
+            continue
+        amount = split.amount_owed
+        amount_128 = Decimal128(amount)
+        neg_amount_128 = Decimal128(-amount)
+
+        # Reverse debtor owes payer
+        await balance_collection.update_one(
+            {"user_id": debtor_id, "counterpart_id": paid_by},
+            {
+                "$inc": {"net_amount": neg_amount_128},
+                "$set": {"updated_at": updated_at},
+            },
+            upsert=True,
+        )
+
+        # Reverse payer is owed by debtor
+        await balance_collection.update_one(
+            {"user_id": paid_by, "counterpart_id": debtor_id},
+            {
+                "$inc": {"net_amount": amount_128},
+                "$set": {"updated_at": updated_at},
+            },
+            upsert=True,
+        )
+
+
+async def delete_group_transaction(
+    user_id: str,
+    group_id: str,
+    transaction_id: str,
+    actor_name: str,
+) -> None:
+    """Delete a group transaction and reverse its balance effects."""
+    try:
+        group = await Group.get(PydanticObjectId(group_id))
+    except Exception:
+        group = None
+
+    if not group:
+        raise ValueError("NOT_FOUND")
+    if user_id not in group.members:
+        raise ValueError("NOT_A_MEMBER")
+
+    try:
+        transaction = await GroupTransaction.get(PydanticObjectId(transaction_id))
+    except Exception:
+        transaction = None
+
+    if not transaction or transaction.group_id != group_id:
+        raise ValueError("NOT_FOUND")
+
+    if transaction.paid_by != user_id:
+        raise ValueError("NOT_AUTHORIZED")
+
+    # Reverse balances
+    await _reverse_balances_for_transaction(transaction)
+
+    description = transaction.description
+    await transaction.delete()
+
+    # Notify members
+    affected_user_ids = {transaction.paid_by} | {s.user_id for s in transaction.splits}
+    for member_id in affected_user_ids:
+        if member_id == user_id:
+            continue
+        await create_notification(
+            user_id=member_id,
+            type="group_transaction",
+            title=f"Transaction deleted in {group.name}",
+            body=f"{actor_name} deleted a transaction: {description}",
+            metadata={"group_id": group_id, "transaction_id": transaction_id},
+        )
+
+
+async def update_group_transaction(
+    user_id: str,
+    group_id: str,
+    transaction_id: str,
+    data: GroupTransactionCreate,
+    actor_name: str,
+) -> GroupTransactionResponse:
+    """Update a group transaction and recalculate balances."""
+    try:
+        group = await Group.get(PydanticObjectId(group_id))
+    except Exception:
+        group = None
+
+    if not group:
+        raise ValueError("NOT_FOUND")
+    if user_id not in group.members:
+        raise ValueError("NOT_A_MEMBER")
+
+    try:
+        transaction = await GroupTransaction.get(PydanticObjectId(transaction_id))
+    except Exception:
+        transaction = None
+
+    if not transaction or transaction.group_id != group_id:
+        raise ValueError("NOT_FOUND")
+
+    if transaction.paid_by != user_id:
+        raise ValueError("NOT_AUTHORIZED")
+
+    # Validate paid_by is a member
+    if data.paid_by not in group.members:
+        raise ValueError("PAID_BY_NOT_MEMBER")
+
+    total_amount = data.amount
+
+    # Determine stored splits based on split_type
+    if data.split_type == "equal":
+        if not data.split_among or len(data.split_among) == 0:
+            raise ValueError("SPLIT_AMONG_EMPTY")
+        invalid = set(data.split_among) - set(group.members)
+        if invalid:
+            raise ValueError("INVALID_SPLIT_USER")
+        stored_splits = _compute_equal_splits(total_amount, data.split_among, data.paid_by)
+    else:
+        if not data.splits:
+            raise ValueError("SPLITS_EMPTY")
+        seen = set()
+        for entry in data.splits:
+            if entry.user_id in seen:
+                raise ValueError("DUPLICATE_SPLIT_USER")
+            seen.add(entry.user_id)
+            if entry.user_id not in group.members:
+                raise ValueError("INVALID_SPLIT_USER")
+        provided_sum = sum(entry.amount_owed for entry in data.splits)
+        if abs(provided_sum - total_amount) > Decimal("0.01"):
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "SPLIT_MISMATCH",
+                    "message": "Split amounts must sum to the total amount.",
+                    "details": {
+                        "expected": float(total_amount),
+                        "received": float(provided_sum),
+                    },
+                },
+            )
+        stored_splits = [
+            SplitResponse(user_id=entry.user_id, amount_owed=entry.amount_owed, is_settled=False)
+            for entry in data.splits
+        ]
+
+    # Reverse old balances
+    await _reverse_balances_for_transaction(transaction)
+
+    # Update transaction
+    transaction.description = data.description
+    transaction.total_amount = total_amount
+    transaction.paid_by = data.paid_by
+    transaction.split_type = data.split_type
+    transaction.splits = [
+        {"user_id": s.user_id, "amount_owed": s.amount_owed, "is_settled": s.is_settled}
+        for s in stored_splits
+    ]
+    transaction.date = datetime.combine(data.date, datetime.min.time()).replace(tzinfo=timezone.utc)
+    await transaction.save()
+
+    # Apply new balances
+    await _update_balances_for_transaction(transaction)
+
+    # Notify members
+    affected_user_ids = {data.paid_by} | {s.user_id for s in stored_splits}
+    for member_id in affected_user_ids:
+        if member_id == user_id:
+            continue
+        await create_notification(
+            user_id=member_id,
+            type="group_transaction",
+            title=f"Transaction updated in {group.name}",
+            body=f"{actor_name} updated a transaction: {data.description}",
+            metadata={"group_id": group_id, "transaction_id": str(transaction.id)},
+        )
+
+    return _make_transaction_response(transaction)
+
+
 async def list_group_transactions(user_id: str, group_id: str) -> list[GroupTransactionResponse]:
     """List group transactions sorted by date descending."""
     try:
@@ -434,6 +647,7 @@ async def list_group_transactions(user_id: str, group_id: str) -> list[GroupTran
 
     transactions = await GroupTransaction.find({"group_id": group_id}).sort(-GroupTransaction.date).to_list()
     return [_make_transaction_response(t) for t in transactions]
+
 
 
 # ===== Balances =====

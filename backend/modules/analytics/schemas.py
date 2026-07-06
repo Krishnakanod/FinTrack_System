@@ -67,3 +67,75 @@ class ReportDownloadRequest(BaseModel):
     start_date: date
     end_date: date
     format: Literal["pdf", "excel"]
+
+
+# ===== Analytics overhaul schemas =====
+
+class PersonalSummary(BaseModel):
+    total_expenses: float
+    total_income: float
+    net_balance: float
+    savings_rate: float | None = None
+
+
+class IncomeExpenseBucket(BaseModel):
+    label: str
+    income: float
+    expense: float
+
+
+class TrendBucket(BaseModel):
+    label: str
+    amount: float
+
+
+class PaymentTypeBreakdown(BaseModel):
+    payment_type: str
+    total_amount: float
+    percentage: float
+
+
+class TopCategory(BaseModel):
+    rank: int
+    category: str
+    total_amount: float
+
+
+class PersonalAnalyticsResponse(BaseModel):
+    period: str
+    range: DateRange
+    summary: PersonalSummary
+    income_vs_expense: list[IncomeExpenseBucket]
+    spending_trend: list[TrendBucket]
+    payment_type_breakdown: list[PaymentTypeBreakdown]
+    top_categories: list[TopCategory]
+    recent_activity: list[RecentActivityItem]
+
+
+class MemberContribution(BaseModel):
+    member_id: str
+    member_name: str
+    paid: float
+    owed: float
+
+
+class GroupSummary(BaseModel):
+    total_spend: float
+    your_contribution: float
+    unsettled_amount: float
+    settled_amount: float
+
+
+class UnsettledSettledItem(BaseModel):
+    label: str
+    amount: float
+
+
+class GroupAnalyticsResponse(BaseModel):
+    period: str
+    range: DateRange
+    summary: GroupSummary
+    unsettled_vs_settled: list[UnsettledSettledItem]
+    per_member_contribution: list[MemberContribution]
+    spending_trend: list[TrendBucket]
+    recent_activity: list[RecentActivityItem]

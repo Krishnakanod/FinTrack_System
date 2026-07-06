@@ -96,6 +96,7 @@ class GroupResponse(BaseModel):
     name: str
     description: str | None = None
     created_by: str
+    created_by_name: str
     members: list[MemberProfile]
     created_at: str
 

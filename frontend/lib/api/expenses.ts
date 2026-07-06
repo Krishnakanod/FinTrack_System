@@ -70,6 +70,7 @@ export interface OcrConfirmInput {
 
 export interface ExpenseFilters {
   category?: string;
+  payment_type?: string;
   date_from?: string; // YYYY-MM-DD
   date_to?: string; // YYYY-MM-DD
 }
@@ -114,6 +115,7 @@ export async function listExpenses(
 ): Promise<ExpenseListResponse> {
   const params = new URLSearchParams();
   if (filters?.category) params.set("category", filters.category);
+  if (filters?.payment_type) params.set("payment_type", filters.payment_type);
   if (filters?.date_from) params.set("date_from", filters.date_from);
   if (filters?.date_to) params.set("date_to", filters.date_to);
 

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -34,6 +35,9 @@ const signupSchema = z
       .regex(/[a-zA-Z]/, "Password must contain at least one letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
     confirm_password: z.string(),
+    terms: z.boolean().refine((v) => v === true, {
+      message: "You must agree to the Terms & Conditions to continue.",
+    }),
   })
   .refine((data) => data.password === data.confirm_password, {
     message: "Passwords do not match",
@@ -61,6 +65,13 @@ export default function SignupPage() {
     getValues,
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirm_password: "",
+      terms: false,
+    },
   });
 
   // Countdown timer effect
@@ -305,6 +316,23 @@ export default function SignupPage() {
                 <p className="text-sm text-red-500">
                   {errors.confirm_password.message}
                 </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Checkbox
+                id="terms"
+                {...register("terms")}
+                label={
+                  <span>
+                    I agree to the{" "}
+                    <span className="text-zinc-900 underline dark:text-zinc-100">
+                      Terms & Conditions
+                    </span>
+                  </span>
+                }
+              />
+              {errors.terms && (
+                <p className="text-sm text-red-500">{errors.terms.message}</p>
               )}
             </div>
           </CardContent>

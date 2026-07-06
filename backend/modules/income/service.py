@@ -28,6 +28,7 @@ async def create_income(user_id: str, data: IncomeCreate) -> Income:
 async def list_income(
     user_id: str,
     source_type: Optional[str] = None,
+    payment_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> list[Income]:
@@ -38,6 +39,9 @@ async def list_income(
 
     if source_type:
         query["source_type"] = source_type
+
+    if payment_type:
+        query["payment_type"] = payment_type
 
     if date_from or date_to:
         date_filter = {}

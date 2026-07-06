@@ -30,6 +30,43 @@ reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 Period = Literal["daily", "weekly", "monthly", "quarterly"]
 
 
+@router.get("/personal")
+async def get_personal_analytics(
+    period: Period = "monthly",
+    current_user: User = Depends(get_current_user),
+):
+    return await service.get_personal_analytics(str(current_user.id), period)
+
+
+@router.get("/group")
+async def get_group_analytics(
+    group_id: str,
+    period: Period = "monthly",
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return await service.get_group_analytics(str(current_user.id), group_id, period)
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_A_MEMBER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_A_MEMBER",
+                    "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "Group not found.",
+                "details": {},
+            },
+        )
+
+
 @router.get("/expenses")
 async def get_expenses_breakdown(
     period: Period = "monthly",

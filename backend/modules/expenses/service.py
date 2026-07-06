@@ -83,6 +83,7 @@ async def confirm_ocr_expense(user_id: str, data: OcrConfirmRequest) -> Expense:
 async def list_expenses(
     user_id: str,
     category: Optional[str] = None,
+    payment_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> list[Expense]:
@@ -93,6 +94,9 @@ async def list_expenses(
 
     if category:
         query["category"] = category
+
+    if payment_type:
+        query["payment_type"] = payment_type
 
     if date_from or date_to:
         date_filter = {}

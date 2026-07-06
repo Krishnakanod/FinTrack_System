@@ -40,6 +40,7 @@ export interface IncomeUpdateInput {
 
 export interface IncomeFilters {
   source_type?: string;
+  payment_type?: string;
   date_from?: string; // YYYY-MM-DD
   date_to?: string; // YYYY-MM-DD
 }
@@ -80,6 +81,7 @@ export async function listIncome(
 ): Promise<IncomeListResponse> {
   const params = new URLSearchParams();
   if (filters?.source_type) params.set("source_type", filters.source_type);
+  if (filters?.payment_type) params.set("payment_type", filters.payment_type);
   if (filters?.date_from) params.set("date_from", filters.date_from);
   if (filters?.date_to) params.set("date_to", filters.date_to);
 

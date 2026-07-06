@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
   ChevronRight,
+  BarChart3,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ import {
 } from "@/lib/api/groups";
 import { listFriends, type FriendProfile } from "@/lib/api/friends";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/lib/store/auth-store";
+
 
 interface MemberOptionProps {
   friend: FriendProfile;
@@ -84,7 +87,9 @@ function MemberOption({ friend, selected, onToggle }: MemberOptionProps) {
 
 export default function GroupsPage() {
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -102,6 +107,12 @@ export default function GroupsPage() {
 
   const friends = friendsData?.items ?? [];
   const groups = data?.items ?? [];
+
+  const filteredGroups = groups.filter((group) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return group.name.toLowerCase().includes(query);
+  });
 
   const filteredFriends = friends.filter(
     (f) =>
@@ -148,7 +159,7 @@ export default function GroupsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
             Groups
@@ -156,6 +167,15 @@ export default function GroupsPage() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Manage your groups and shared expenses
           </p>
+        </div>
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Input
+            placeholder="Search groups..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -259,9 +279,17 @@ export default function GroupsPage() {
             </p>
           </CardContent>
         </Card>
+      ) : filteredGroups.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-zinc-900 dark:text-zinc-50 font-medium">
+              No groups match your search.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="groups-list">
-          {groups.map((group) => (
+          {filteredGroups.map((group) => (
             <Link
               key={group.id}
               href={`/dashboard/groups/${group.id}`}
@@ -278,14 +306,33 @@ export default function GroupsPage() {
                       {group.description}
                     </CardDescription>
                   )}
+                  <p className="text-xs text-zinc-500">
+                    Created by {group.created_by === currentUser?.id ? "You" : `@${group.created_by_name}`}
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-zinc-500">
                     {group.members.length} members
                   </p>
-                  <div className="mt-2 flex items-center text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                    View details
-                    <ChevronRight className="ml-1 h-4 w-4" />
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                      View details
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Link
+                        href={`/dashboard/analytics?tab=group&groupId=${group.id}`}
+                        className="flex items-center gap-1 text-xs"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                        View Analytics
+                      </Link>
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

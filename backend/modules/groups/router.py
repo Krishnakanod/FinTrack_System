@@ -89,12 +89,31 @@ async def update_group(
     try:
         return await groups_service.update_group(str(current_user.id), group_id, data)
     except ValueError as e:
-        if str(e) == "NOT_A_MEMBER":
+        code = str(e)
+        if code == "NOT_A_MEMBER":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "error": "NOT_A_MEMBER",
                     "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        if code == "NOT_AUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_AUTHORIZED",
+                    "message": "Only the group creator can rename the group.",
+                    "details": {},
+                },
+            )
+        if code == "INVALID_NAME_LENGTH":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "INVALID_NAME_LENGTH",
+                    "message": "Group name must be between 3 and 50 characters.",
                     "details": {},
                 },
             )
@@ -276,6 +295,96 @@ async def list_group_transactions(
             detail={
                 "error": "NOT_FOUND",
                 "message": "Group not found.",
+                "details": {},
+            },
+        )
+
+
+@router.put("/groups/groups/{group_id}/transactions/{transaction_id}", status_code=status.HTTP_200_OK)
+async def update_group_transaction(
+    group_id: str,
+    transaction_id: str,
+    data: GroupTransactionCreate,
+    current_user: User = Depends(get_current_user),
+) -> GroupTransactionResponse:
+    """Update a group transaction (only the payer can edit)."""
+    try:
+        return await groups_service.update_group_transaction(
+            str(current_user.id),
+            group_id,
+            transaction_id,
+            data,
+            actor_name=current_user.name,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_A_MEMBER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_A_MEMBER",
+                    "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        if code == "NOT_AUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_AUTHORIZED",
+                    "message": "Only the payer can edit this transaction.",
+                    "details": {},
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "Group or transaction not found.",
+                "details": {},
+            },
+        )
+
+
+@router.delete("/groups/groups/{group_id}/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_group_transaction(
+    group_id: str,
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a group transaction (only the payer can delete)."""
+    try:
+        await groups_service.delete_group_transaction(
+            str(current_user.id),
+            group_id,
+            transaction_id,
+            actor_name=current_user.name,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_A_MEMBER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_A_MEMBER",
+                    "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        if code == "NOT_AUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_AUTHORIZED",
+                    "message": "Only the payer can delete this transaction.",
+                    "details": {},
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "Group or transaction not found.",
                 "details": {},
             },
         )

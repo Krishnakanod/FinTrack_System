@@ -25,6 +25,17 @@ from modules.analytics.schemas import (
     NetBalanceResponse,
     RecentActivityResponse,
     RecentActivityItem,
+    DateRange,
+    PersonalSummary,
+    IncomeExpenseBucket,
+    TrendBucket,
+    PaymentTypeBreakdown,
+    TopCategory,
+    PersonalAnalyticsResponse,
+    GroupSummary,
+    UnsettledSettledItem,
+    MemberContribution,
+    GroupAnalyticsResponse,
 )
 from shared.period_utils import get_period_range, now_in_ist, decimal_to_float
 
@@ -292,3 +303,218 @@ async def generate_report_data(user_id: str, start_date: dt_date, end_date: dt_d
         "total_income": total_income,
         "net_balance": total_income - total_expense,
     }
+
+
+async def get_personal_analytics(user_id: str, period: str) -> PersonalAnalyticsResponse:
+    from collections import defaultdict
+
+    start, end = get_period_range(period, now_in_ist())
+    start_str = start.isoformat()
+    end_str = end.isoformat()
+
+    # Fetch expenses and income within the period
+    expenses = await Expense.find(
+        {
+            "user_id": user_id,
+            "date": {"$gte": start, "$lte": end},
+        }
+    ).sort("-date").to_list()
+
+    incomes = await Income.find(
+        {
+            "user_id": user_id,
+            "date": {"$gte": start, "$lte": end},
+        }
+    ).sort("-date").to_list()
+
+    total_expense = sum((e.amount for e in expenses), Decimal("0"))
+    total_income = sum((i.amount for i in incomes), Decimal("0"))
+    net_balance = total_income - total_expense
+    savings_rate = None
+    if total_income > 0:
+        savings_rate = round(float(net_balance) / float(total_income) * 100, 1)
+
+    # Bucket income vs expense
+    income_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    expense_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+
+    for income in incomes:
+        bucket = get_period_anchor(period, income.date)
+        income_buckets[bucket] += income.amount
+    for expense in expenses:
+        bucket = get_period_anchor(period, expense.date)
+        expense_buckets[bucket] += expense.amount
+
+    all_buckets = sorted(set(income_buckets.keys()) | set(expense_buckets.keys()))
+    income_vs_expense = [
+        IncomeExpenseBucket(
+            label=b,
+            income=decimal_to_float(income_buckets[b]),
+            expense=decimal_to_float(expense_buckets[b]),
+        )
+        for b in all_buckets
+    ]
+
+    spending_trend = [
+        TrendBucket(label=b, amount=decimal_to_float(expense_buckets[b]))
+        for b in all_buckets
+    ]
+
+    # Payment type breakdown
+    payment_totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for expense in expenses:
+        payment_totals[expense.payment_type] += expense.amount
+    total_payment = sum(payment_totals.values(), Decimal("0"))
+    payment_type_breakdown = [
+        PaymentTypeBreakdown(
+            payment_type=pt,
+            total_amount=decimal_to_float(amount),
+            percentage=round(decimal_to_float(amount) / decimal_to_float(total_payment) * 100, 1)
+            if total_payment > 0 else 0.0,
+        )
+        for pt, amount in sorted(payment_totals.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # Top 3 categories
+    category_totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for expense in expenses:
+        category_totals[expense.category] += expense.amount
+    top_categories = [
+        TopCategory(rank=idx + 1, category=cat, total_amount=decimal_to_float(amount))
+        for idx, (cat, amount) in enumerate(
+            sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:3]
+        )
+    ]
+
+    # Recent activity (limit 10)
+    recent = await get_recent_activity(user_id, limit=10)
+
+    return PersonalAnalyticsResponse(
+        period=period,
+        range=DateRange(start=start_str, end=end_str),
+        summary=PersonalSummary(
+            total_expenses=decimal_to_float(total_expense),
+            total_income=decimal_to_float(total_income),
+            net_balance=decimal_to_float(net_balance),
+            savings_rate=savings_rate,
+        ),
+        income_vs_expense=income_vs_expense,
+        spending_trend=spending_trend,
+        payment_type_breakdown=payment_type_breakdown,
+        top_categories=top_categories,
+        recent_activity=recent.items,
+    )
+
+
+async def get_group_analytics(
+    user_id: str, group_id: str, period: str
+) -> GroupAnalyticsResponse:
+    from collections import defaultdict
+
+    try:
+        group = await Group.get(PydanticObjectId(group_id))
+    except Exception:
+        group = None
+
+    if not group:
+        raise ValueError("NOT_FOUND")
+    if user_id not in group.members:
+        raise ValueError("NOT_A_MEMBER")
+
+    start, end = get_period_range(period, now_in_ist())
+    start_str = start.isoformat()
+    end_str = end.isoformat()
+
+    # Fetch group transactions in the period
+    transactions = await GroupTransaction.find(
+        {
+            "group_id": group_id,
+            "date": {"$gte": start, "$lte": end},
+        }
+    ).sort("-date").to_list()
+
+    member_profiles = {str(m.id): m for m in group.members}
+
+    total_spend = sum((t.total_amount for t in transactions), Decimal("0"))
+    your_contribution = sum(
+        (t.total_amount for t in transactions if t.paid_by == user_id), Decimal("0")
+    )
+
+    unsettled_amount = Decimal("0")
+    settled_amount = Decimal("0")
+    for t in transactions:
+        for split in t.splits:
+            if split.is_settled:
+                settled_amount += split.amount_owed
+            else:
+                unsettled_amount += split.amount_owed
+
+    # Unsettled vs settled
+    unsettled_vs_settled = [
+        UnsettledSettledItem(label="Unsettled", amount=decimal_to_float(unsettled_amount)),
+        UnsettledSettledItem(label="Settled", amount=decimal_to_float(settled_amount)),
+    ]
+
+    # Per-member contribution
+    member_paid: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    member_owed: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for t in transactions:
+        member_paid[t.paid_by] += t.total_amount
+        for split in t.splits:
+            if split.user_id != t.paid_by:
+                member_owed[split.user_id] += split.amount_owed
+
+    member_users = await User.find({"_id": {"$in": [PydanticObjectId(uid) for uid in group.members]}}).to_list()
+    member_names = {str(u.id): u.name for u in member_users}
+
+    per_member_contribution = [
+        MemberContribution(
+            member_id=member_id,
+            member_name=member_names.get(member_id, "Unknown"),
+            paid=decimal_to_float(amount),
+            owed=decimal_to_float(member_owed[member_id]),
+        )
+        for member_id, amount in sorted(member_paid.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # Spending trend
+    spending_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for t in transactions:
+        bucket = get_period_anchor(period, t.date)
+        spending_buckets[bucket] += t.total_amount
+    spending_trend = [
+        TrendBucket(label=b, amount=decimal_to_float(amount))
+        for b, amount in sorted(spending_buckets.items())
+    ]
+
+    # Recent group activity (limit 10)
+    recent_items: list[RecentActivityItem] = []
+    for t in transactions[:10]:
+        recent_items.append(
+            RecentActivityItem(
+                type="group_transaction",
+                id=str(t.id),
+                description=t.description,
+                amount=decimal_to_float(t.total_amount),
+                date=t.date.isoformat(),
+                direction="out",
+                created_at=t.created_at.isoformat() if t.created_at else None,
+                group_id=group_id,
+                group_name=group.name,
+            )
+        )
+
+    return GroupAnalyticsResponse(
+        period=period,
+        range=DateRange(start=start_str, end=end_str),
+        summary=GroupSummary(
+            total_spend=decimal_to_float(total_spend),
+            your_contribution=decimal_to_float(your_contribution),
+            unsettled_amount=decimal_to_float(unsettled_amount),
+            settled_amount=decimal_to_float(settled_amount),
+        ),
+        unsettled_vs_settled=unsettled_vs_settled,
+        per_member_contribution=per_member_contribution,
+        spending_trend=spending_trend,
+        recent_activity=recent_items,
+    )

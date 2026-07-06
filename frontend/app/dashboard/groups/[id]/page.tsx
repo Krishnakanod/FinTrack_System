@@ -14,6 +14,8 @@ import {
   Plus,
   Receipt,
   Scale,
+  Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -36,7 +38,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -49,11 +50,17 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateIST } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
+import {
+  BarChart3,
+} from "lucide-react";
 import {
   getGroup,
   listGroupTransactions,
   addTransaction,
   updateGroup,
+  updateGroupTransaction,
+  deleteGroupTransaction,
   type Group,
   type GroupTransaction,
   type MemberProfile,
@@ -96,17 +103,22 @@ export default function GroupDetailPage() {
   const groupId = params.id;
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
+  const { confirm, ConfirmModal } = useConfirmModal();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddMode, setIsAddMode] = useState(true);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [amount, setAmount] = useState<string>("");
   const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState<string>("");
+  const [transactionDate, setTransactionDate] = useState<string>(getTodayIST());
   const [splitType, setSplitType] = useState<SplitMode>("equal");
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
     new Set(),
   );
   const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [selectedTransaction, setSelectedTransaction] = useState<GroupTransaction | null>(null);
+  const [transactionSearch, setTransactionSearch] = useState<string>("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [nameError, setNameError] = useState("");
@@ -149,8 +161,55 @@ export default function GroupDetailPage() {
     },
   });
 
+  const updateTransactionMutation = useMutation({
+    mutationFn: (data: {
+      amount: number;
+      description: string;
+      paid_by: string;
+      split_type: SplitMode;
+      split_among?: string[];
+      splits?: { user_id: string; amount_owed: number }[];
+      date: string;
+    }) => updateGroupTransaction(groupId, editingTransactionId!, data),
+    onSuccess: () => {
+      toast.success("Transaction updated");
+      queryClient.invalidateQueries({
+        queryKey: ["groups", groupId, "transactions"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["balances"] });
+      resetForm();
+      setIsDialogOpen(false);
+      setEditingTransactionId(null);
+      setSelectedTransaction(null);
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to update transaction");
+    },
+  });
+
+  const deleteTransactionMutation = useMutation({
+    mutationFn: ({ transactionId }: { transactionId: string }) =>
+      deleteGroupTransaction(groupId, transactionId),
+    onSuccess: () => {
+      toast.success("Transaction deleted");
+      queryClient.invalidateQueries({
+        queryKey: ["groups", groupId, "transactions"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["balances"] });
+      setSelectedTransaction(null);
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to delete transaction");
+    },
+  });
+
   const members = group?.members ?? [];
   const transactions = transactionsData?.items ?? [];
+
+  const filteredTransactions = transactions.filter((t) => {
+    if (!transactionSearch.trim()) return true;
+    return t.description.toLowerCase().includes(transactionSearch.toLowerCase());
+  });
 
   const selectedMembers = useMemo(
     () => members.filter((m) => selectedMemberIds.has(m.id)),
@@ -176,10 +235,38 @@ export default function GroupDetailPage() {
       ? Math.abs(customTotal - parsedAmount) < 0.01
       : true;
 
+  function openAddDialog() {
+    resetForm();
+    setIsAddMode(true);
+    setEditingTransactionId(null);
+    setIsDialogOpen(true);
+  }
+
+  function openEditDialog(transaction: GroupTransaction) {
+    resetForm();
+    setIsAddMode(false);
+    setEditingTransactionId(transaction.id);
+    setAmount(String(transaction.total_amount));
+    setDescription(transaction.description);
+    setPaidBy(transaction.paid_by);
+    setTransactionDate(transaction.date.split("T")[0]);
+    setSplitType(transaction.split_type);
+    setSelectedMemberIds(new Set(transaction.splits.map((s) => s.user_id)));
+    if (transaction.split_type === "custom") {
+      const shares: Record<string, string> = {};
+      transaction.splits.forEach((s) => {
+        shares[s.user_id] = String(s.amount_owed);
+      });
+      setCustomShares(shares);
+    }
+    setIsDialogOpen(true);
+  }
+
   function resetForm() {
     setAmount("");
     setDescription("");
     setPaidBy("");
+    setTransactionDate(getTodayIST());
     setSplitType("equal");
     setSelectedMemberIds(new Set());
     setCustomShares({});
@@ -239,27 +326,29 @@ export default function GroupDetailPage() {
       return;
     }
 
+    const mutation = isAddMode ? addTransactionMutation : updateTransactionMutation;
+
     if (splitType === "equal") {
-      addTransactionMutation.mutate({
+      mutation.mutate({
         amount: total,
         description: description.trim(),
         paid_by: paidBy,
         split_type: "equal",
         split_among: selectedMembers.map((m) => m.id),
-        date: getTodayIST(),
+        date: transactionDate,
       });
     } else {
       const splits = selectedMembers.map((m) => ({
         user_id: m.id,
         amount_owed: parseFloat(customShares[m.id] || "0"),
       }));
-      addTransactionMutation.mutate({
+      mutation.mutate({
         amount: total,
         description: description.trim(),
         paid_by: paidBy,
         split_type: "custom",
         splits,
-        date: getTodayIST(),
+        date: transactionDate,
       });
     }
   }
@@ -293,6 +382,12 @@ export default function GroupDetailPage() {
             Back
           </Link>
         </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/dashboard/analytics?tab=group&groupId=${groupId}`}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            View Analytics
+          </Link>
+        </Button>
         <div className="flex-1">
           {isEditingName ? (
             <div className="flex items-center gap-2">
@@ -311,6 +406,10 @@ export default function GroupDetailPage() {
                   const trimmed = editedName.trim();
                   if (!trimmed) {
                     setNameError("Group name cannot be empty");
+                    return;
+                  }
+                  if (trimmed.length < 3 || trimmed.length > 50) {
+                    setNameError("Group name must be between 3 and 50 characters");
                     return;
                   }
                   try {
@@ -345,53 +444,66 @@ export default function GroupDetailPage() {
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 {group.name}
               </h1>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setEditedName(group.name);
-                  setIsEditingName(true);
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+              {group.created_by === currentUser?.id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditedName(group.name);
+                    setIsEditingName(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           )}
           {nameError && (
             <p className="text-sm text-red-500">{nameError}</p>
           )}
-          {group.description && !isEditingName && (
-            <p className="text-sm text-zinc-500">{group.description}</p>
-          )}
+          <p className="text-sm text-zinc-500">
+            Created by {group.created_by === currentUser?.id ? "You" : `@${group.created_by_name}`}
+          </p>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Receipt className="h-5 w-5" />
                   Transactions
                 </CardTitle>
                 <CardDescription>
-                  {transactions.length} transaction
-                  {transactions.length !== 1 ? "s" : ""}
+                  {filteredTransactions.length} transaction
+                  {filteredTransactions.length !== 1 ? "s" : ""}
                 </CardDescription>
               </div>
+              <div className="relative w-full sm:w-60">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  placeholder="Search transactions..."
+                  value={transactionSearch}
+                  onChange={(e) => setTransactionSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Button data-testid="add-transaction-button" onClick={openAddDialog}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Transaction
+              </Button>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button data-testid="add-transaction-button">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Transaction
-                  </Button>
-                </DialogTrigger>
                 <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add Transaction</DialogTitle>
+                    <DialogTitle>
+                      {isAddMode ? "Add Transaction" : "Edit Transaction"}
+                    </DialogTitle>
                     <DialogDescription>
-                      Add an expense and split it among group members.
+                      {isAddMode
+                        ? "Add an expense and split it among group members."
+                        : "Update the transaction details."}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
@@ -414,8 +526,8 @@ export default function GroupDetailPage() {
                         <Input
                           id="date"
                           type="date"
-                          value={getTodayIST()}
-                          disabled
+                          value={transactionDate}
+                          onChange={(e) => setTransactionDate(e.target.value)}
                         />
                       </div>
                     </div>
@@ -641,9 +753,15 @@ export default function GroupDetailPage() {
                     No transactions yet. Add the first one!
                   </p>
                 </div>
+              ) : filteredTransactions.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-zinc-500">
+                    No transactions match your search.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  {transactions.map((t) => (
+                  {filteredTransactions.map((t) => (
                     <div
                       key={t.id}
                       className="flex cursor-pointer items-center justify-between rounded-lg border border-zinc-200 p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
@@ -786,10 +904,52 @@ export default function GroupDetailPage() {
                   ))}
                 </div>
               </div>
+              {selectedTransaction.paid_by === currentUser?.id && (
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const confirmed = await confirm({
+                        message:
+                          "You are about to edit this transaction for all group members.",
+                        confirmLabel: "Edit",
+                      });
+                      if (confirmed && selectedTransaction) {
+                        const tx = selectedTransaction;
+                        setSelectedTransaction(null);
+                        openEditDialog(tx);
+                      }
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      const confirmed = await confirm({
+                        message:
+                          "This transaction will be permanently deleted for all group members.",
+                        confirmLabel: "Delete",
+                        confirmVariant: "destructive",
+                      });
+                      if (confirmed && selectedTransaction) {
+                        deleteTransactionMutation.mutate({
+                          transactionId: selectedTransaction.id,
+                        });
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmModal />
     </div>
   );
 }

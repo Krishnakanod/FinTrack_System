@@ -49,6 +49,7 @@ async def create_income(
 @router.get("/", status_code=status.HTTP_200_OK)
 async def list_income(
     source_type: str | None = None,
+    payment_type: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     current_user: User = Depends(get_current_user),
@@ -57,6 +58,7 @@ async def list_income(
     incomes = await income_service.list_income(
         user_id=str(current_user.id),
         source_type=source_type,
+        payment_type=payment_type,
         date_from=date_from,
         date_to=date_to,
     )
