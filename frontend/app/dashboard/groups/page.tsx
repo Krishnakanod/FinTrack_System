@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -44,6 +44,7 @@ import {
 import { listFriends, type FriendProfile } from "@/lib/api/friends";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useWebSocketStore } from "@/lib/store/websocket-store";
 
 
 interface MemberOptionProps {
@@ -101,6 +102,15 @@ export default function GroupsPage() {
     queryKey: ["groups"],
     queryFn: listGroups,
   });
+
+  // ─── Real-time: refresh groups list on any group membership change ─────
+  const lastEvent = useWebSocketStore((s) => s.lastEvent);
+  useEffect(() => {
+    if (lastEvent?.type === "GROUP_EVENT") {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    }
+  }, [lastEvent, queryClient]);
+  // ──────────────────────────────────────────────────────
 
   const { data: friendsData } = useQuery({
     queryKey: ["friends"],

@@ -53,12 +53,10 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="user_id mismatch")
         return
 
-    # Accept and register connection
+    # Accept and register connection (manager.connect calls ws.accept internally)
     try:
-        await websocket.accept()
-        print(f"[WS] Connection accepted for user {user_id}")
         await connection_manager.connect(user_id, websocket)
-        print(f"[WS] Registered user {user_id} in connection manager")
+        print(f"[WS] Connection accepted and registered for user {user_id}")
     except Exception as e:
         print(f"[WS] Failed to accept/register connection: {e}")
         return

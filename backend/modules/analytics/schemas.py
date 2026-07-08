@@ -56,6 +56,8 @@ class RecentActivityItem(BaseModel):
     direction: Literal["in", "out"]
     created_at: str | None = None
     paid_to_name: str | None = None
+    source_name: str | None = None
+    category: str | None = None
     group_id: str | None = None
     group_name: str | None = None
 
@@ -113,11 +115,9 @@ class PersonalAnalyticsResponse(BaseModel):
     recent_activity: list[RecentActivityItem]
 
 
-class MemberContribution(BaseModel):
-    member_id: str
-    member_name: str
-    paid: float
-    owed: float
+class MemberBalanceItem(BaseModel):
+    label: str
+    amount: float
 
 
 class GroupSummary(BaseModel):
@@ -129,16 +129,17 @@ class GroupSummary(BaseModel):
     settled_amount: float
 
 
-class UnsettledSettledItem(BaseModel):
-    label: str
+class MemberShareItem(BaseModel):
+    member_name: str
     amount: float
+    percentage: float
 
 
 class GroupAnalyticsResponse(BaseModel):
     period: str
     range: DateRange
     summary: GroupSummary
-    unsettled_vs_settled: list[UnsettledSettledItem]
-    per_member_contribution: list[MemberContribution]
+    member_shares: list[MemberShareItem]
+    member_balances: list[MemberBalanceItem]
     spending_trend: list[TrendBucket]
     recent_activity: list[RecentActivityItem]

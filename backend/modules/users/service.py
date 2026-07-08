@@ -14,7 +14,22 @@ from modules.users.schemas import (
     FriendResponse,
     FriendRequestResponse,
     FriendRequestsListResponse,
+    NotificationPreferencesResponse,
 )
+from modules.websocket.manager import connection_manager
+from modules.notifications.service import create_notification
+
+
+def _friend_event(action: str, actor_id: str, target_id: str) -> dict:
+    """Build a FRIEND_EVENT WebSocket payload."""
+    return {
+        "type": "FRIEND_EVENT",
+        "payload": {
+            "action": action,
+            "actor_id": actor_id,
+            "target_id": target_id,
+        },
+    }
 
 
 # ===== Profile =====
@@ -30,11 +45,12 @@ async def get_profile(user_id: str) -> Optional[UserProfileResponse]:
         username=user.username,
         name=user.name,
         avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
     )
 
 
 async def update_profile(
-    user_id: str, name: Optional[str], username: Optional[str], avatar_url: Optional[str]
+    user_id: str, name: Optional[str], username: Optional[str], avatar_url: Optional[str], upi_id: Optional[str] = None
 ) -> Optional[UserProfileResponse]:
     """Update a user's profile. Returns updated profile or None if not found."""
     user = await User.get(PydanticObjectId(user_id))
@@ -51,6 +67,9 @@ async def update_profile(
     if avatar_url is not None:
         user.avatar_url = avatar_url
         update_data["avatar_url"] = avatar_url
+    if upi_id is not None:
+        user.upi_id = upi_id
+        update_data["upi_id"] = upi_id
     if update_data:
         user.updated_at = datetime.now(timezone.utc)
         await user.save()
@@ -61,6 +80,7 @@ async def update_profile(
         username=user.username,
         name=user.name,
         avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
     )
 
 
@@ -76,6 +96,7 @@ async def search_user_by_email(email: str) -> Optional[UserSearchResult]:
         email=user.email,
         name=user.name,
         avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
     )
 
 
@@ -94,6 +115,7 @@ async def _get_user_public_info(user_id: str) -> Optional[dict]:
         "name": user.name,
         "email": user.email,
         "avatar_url": user.avatar_url,
+        "upi_id": user.upi_id,
     }
 
 
@@ -104,6 +126,7 @@ def _make_friend_response(user_info: dict) -> FriendResponse:
         name=user_info["name"],
         email=user_info["email"],
         avatar_url=user_info.get("avatar_url"),
+        upi_id=user_info.get("upi_id"),
     )
 
 
@@ -146,6 +169,20 @@ async def add_friend(user_id: str, friend_user_id: str) -> FriendResponse:
         existing.status = "pending"
         existing.updated_at = datetime.now(timezone.utc)
         await existing.save()
+        event = _friend_event("request_sent", actor_id=user_id, target_id=friend_user_id)
+        await connection_manager.broadcast([friend_user_id, user_id], event)
+
+        actor_info = await _get_user_public_info(user_id)
+        actor_name = actor_info["name"] if actor_info else "Someone"
+        await create_notification(
+            user_id=friend_user_id,
+            type="friend_request",
+            title="New Friend Request",
+            body=f"{actor_name} sent you a friend request.",
+            metadata={"actor_id": user_id},
+            category="friends",
+        )
+
         return _make_friend_response(friend_info)
 
     try:
@@ -159,6 +196,22 @@ async def add_friend(user_id: str, friend_user_id: str) -> FriendResponse:
         await friendship.insert()
     except DuplicateKeyError:
         raise ValueError("PENDING_REQUEST")
+
+    # Notify the target user that a request arrived,
+    # and the actor that their outgoing list changed.
+    event = _friend_event("request_sent", actor_id=user_id, target_id=friend_user_id)
+    await connection_manager.broadcast([friend_user_id, user_id], event)
+
+    actor_info = await _get_user_public_info(user_id)
+    actor_name = actor_info["name"] if actor_info else "Someone"
+    await create_notification(
+        user_id=friend_user_id,
+        type="friend_request",
+        title="New Friend Request",
+        body=f"{actor_name} sent you a friend request.",
+        metadata={"actor_id": user_id},
+        category="friends",
+    )
 
     return _make_friend_response(friend_info)
 
@@ -259,6 +312,21 @@ async def accept_friend_request(user_id: str, request_id: str) -> FriendResponse
     friendship.updated_at = datetime.now(timezone.utc)
     await friendship.save()
 
+    # Notify original requester that their request was accepted.
+    event = _friend_event("request_accepted", actor_id=user_id, target_id=friendship.requester_id)
+    await connection_manager.broadcast([friendship.requester_id, user_id], event)
+
+    actor_info = await _get_user_public_info(user_id)
+    actor_name = actor_info["name"] if actor_info else "Someone"
+    await create_notification(
+        user_id=friendship.requester_id,
+        type="friend_request",
+        title="Friend Request Accepted",
+        body=f"{actor_name} accepted your friend request.",
+        metadata={"actor_id": user_id},
+        category="friends",
+    )
+
     friend_info = await _get_user_public_info(friendship.requester_id)
     return _make_friend_response(friend_info) if friend_info else None
 
@@ -277,6 +345,10 @@ async def reject_friend_request(user_id: str, request_id: str) -> None:
     friendship.updated_at = datetime.now(timezone.utc)
     await friendship.save()
 
+    # Notify requester their outgoing request was rejected.
+    event = _friend_event("request_rejected", actor_id=user_id, target_id=friendship.requester_id)
+    await connection_manager.broadcast([friendship.requester_id, user_id], event)
+
 
 async def cancel_friend_request(user_id: str, request_id: str) -> None:
     """Cancel an outgoing friend request."""
@@ -291,6 +363,10 @@ async def cancel_friend_request(user_id: str, request_id: str) -> None:
     friendship.status = "cancelled"
     friendship.updated_at = datetime.now(timezone.utc)
     await friendship.save()
+
+    # Notify the addressee their incoming request was cancelled.
+    event = _friend_event("request_cancelled", actor_id=user_id, target_id=friendship.addressee_id)
+    await connection_manager.broadcast([friendship.addressee_id, user_id], event)
 
 
 async def remove_friend(user_id: str, friend_id: str) -> bool:
@@ -308,4 +384,65 @@ async def remove_friend(user_id: str, friend_id: str) -> bool:
         return False
 
     await result.delete()
+
+    # Notify the other user they were removed from someone's friends list.
+    event = _friend_event("friend_removed", actor_id=user_id, target_id=friend_id)
+    await connection_manager.broadcast([friend_id, user_id], event)
+
+    actor_info = await _get_user_public_info(user_id)
+    actor_name = actor_info["name"] if actor_info else "Someone"
+    await create_notification(
+        user_id=friend_id,
+        type="friend_request",
+        title="Removed from Friends",
+        body=f"{actor_name} removed you from their friends list.",
+        metadata={"actor_id": user_id},
+        category="friends",
+    )
+
     return True
+
+
+# ===== Notification Preferences =====
+
+async def get_notification_preferences(user_id: str) -> NotificationPreferencesResponse:
+    """Return the current user's notification opt-in preferences."""
+    user = await User.get(PydanticObjectId(user_id))
+    if not user:
+        raise ValueError("NOT_FOUND")
+    prefs = user.notification_preferences
+    return NotificationPreferencesResponse(
+        friends=prefs.friends,
+        groups=prefs.groups,
+        budget=prefs.budget,
+    )
+
+
+async def update_notification_preferences(
+    user_id: str,
+    friends: bool | None,
+    groups: bool | None,
+    budget: bool | None,
+) -> NotificationPreferencesResponse:
+    """Update the current user's notification opt-in preferences (PATCH semantics).
+    Only fields that are not None are updated.
+    """
+    user = await User.get(PydanticObjectId(user_id))
+    if not user:
+        raise ValueError("NOT_FOUND")
+
+    if friends is not None:
+        user.notification_preferences.friends = friends
+    if groups is not None:
+        user.notification_preferences.groups = groups
+    if budget is not None:
+        user.notification_preferences.budget = budget
+
+    await user.save()
+
+    prefs = user.notification_preferences
+    return NotificationPreferencesResponse(
+        friends=prefs.friends,
+        groups=prefs.groups,
+        budget=prefs.budget,
+    )

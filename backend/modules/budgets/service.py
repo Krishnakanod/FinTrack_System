@@ -120,12 +120,64 @@ async def update_budget(user_id: str, budget_id: str, data: BudgetUpdate) -> Bud
         )
 
     now = now_in_ist()
-    budget.amount = data.amount
-    budget.alert_sent_80 = False
-    budget.alert_sent_100 = False
-    budget.period_anchor = get_period_anchor(budget.period, now)
-    budget.updated_at = now
-    await budget.save()
+    changed = False
+
+    # Apply category change
+    if data.category is not None and data.category != budget.category:
+        # Check for duplicate (user_id, new_category, period)
+        new_period = data.period if data.period is not None else budget.period
+        duplicate = await Budget.find_one({
+            "user_id": user_id,
+            "category": data.category,
+            "period": new_period,
+            "_id": {"$ne": budget.id},
+        })
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "BUDGET_ALREADY_EXISTS",
+                    "message": "A budget for this category and period already exists.",
+                    "details": {},
+                },
+            )
+        budget.category = data.category
+        changed = True
+
+    # Apply period change
+    if data.period is not None and data.period != budget.period:
+        # Check for duplicate (user_id, category, new_period)
+        new_category = data.category if data.category is not None else budget.category
+        duplicate = await Budget.find_one({
+            "user_id": user_id,
+            "category": new_category,
+            "period": data.period,
+            "_id": {"$ne": budget.id},
+        })
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "BUDGET_ALREADY_EXISTS",
+                    "message": "A budget for this category and period already exists.",
+                    "details": {},
+                },
+            )
+        budget.period = data.period
+        changed = True
+
+    # Apply amount change
+    if data.amount is not None:
+        budget.amount = data.amount
+        changed = True
+
+    if changed:
+        # Always reset alert flags and recalculate period anchor on any change
+        budget.alert_sent_80 = False
+        budget.alert_sent_100 = False
+        budget.period_anchor = get_period_anchor(budget.period, now)
+        budget.updated_at = now
+        await budget.save()
 
     return _budget_to_response(budget)
 

@@ -54,31 +54,41 @@ export function Header() {
     }
   };
 
-  // Initial load and refresh on dropdown open
+  // Initial load: fetch unread count only
+  useEffect(() => {
+    if (user) {
+      listNotifications(null, 1, 0)
+        .then((data) => setUnreadCount(data.unread_count))
+        .catch(console.error);
+    }
+  }, [user]);
+
+  // Refresh on dropdown open
   useEffect(() => {
     if (isDropdownOpen) {
       fetchNotifications();
     }
   }, [isDropdownOpen]);
 
-  // Update unread count when WebSocket events occur
+  // Update unread count and list when WebSocket events occur
   useEffect(() => {
     if (lastEvent?.type === "NOTIFICATION") {
-      // Refresh notifications to update unread count
-      if (isDropdownOpen) {
-        fetchNotifications();
-      } else {
-        // Just fetch the count without full list
-        listNotifications(null, 1, 0)
-          .then(data => setUnreadCount(data.unread_count))
-          .catch(console.error);
-      }
+      const newNotification = lastEvent.payload as Notification;
+
+      // Optimistically update local state without fetching
+      setNotifications((prev) => {
+        // Prevent duplicates just in case
+        if (prev.some((n) => n.id === newNotification.id)) return prev;
+        return [newNotification, ...prev].slice(0, 10);
+      });
+      
+      setUnreadCount((prev) => prev + 1);
     }
-  }, [lastEvent, isDropdownOpen]);
+  }, [lastEvent]);
 
   // Handle mark as read
-  const handleMarkAsRead = async (notificationId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleMarkAsRead = async (notificationId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       await markNotificationAsRead(notificationId);
 
@@ -196,7 +206,7 @@ export function Header() {
                         ? "bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30"
                         : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
                     }`}
-                    onClick={() => !notification.is_read && handleMarkAsRead(notification.id, {} as any)}
+                    onClick={(e) => !notification.is_read && handleMarkAsRead(notification.id, e)}
                   >
                     <div className="flex justify-between">
                       <h4 className={`font-medium ${!notification.is_read ? 'text-blue-800 dark:text-blue-200' : 'text-zinc-900 dark:text-zinc-50'}`}>

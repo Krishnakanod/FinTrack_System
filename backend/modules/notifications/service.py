@@ -29,7 +29,8 @@ async def create_notification(
     title: str,
     body: str,
     metadata: dict | None = None,
-) -> Notification:
+    category: str | None = None,
+) -> Notification | None:
     """
     Saves the notification to MongoDB AND broadcasts it via WebSocket
     in the same call, per TRD.md §9.1. This is the ONLY function other
@@ -38,16 +39,36 @@ async def create_notification(
     both jobs atomically.
 
     Args:
-        user_id: Target user's ID
-        type: One of "group_transaction" | "budget_alert" |
-              "income_received" | "expense_added"
-        title: Short notification title
-        body: Notification body text
-        metadata: Optional dict with contextual fields (group_id, transaction_id, etc.)
+        user_id:  Target user's ID
+        type:     One of "group_transaction" | "budget_alert" |
+                  "income_received" | "expense_added" | "friend_request"
+        title:    Short notification title
+        body:     Notification body text
+        metadata: Optional dict with contextual fields
+        category: One of "friends" | "groups" | "budget" | None.
+                  When provided, the target user's notification_preferences
+                  for that category is checked; if OFF the notification is
+                  silently skipped and None is returned.
+                  None means always-deliver (system-level or uncategorised).
 
     Returns:
-        The saved Notification document.
+        The saved Notification document, or None if skipped.
     """
+    # ── Preference gate ────────────────────────────────────────────────────
+    if category is not None:
+        from modules.auth.models import User
+        from beanie import PydanticObjectId as _OID
+        try:
+            target_user = await User.get(_OID(user_id))
+        except Exception:
+            target_user = None
+        if target_user:
+            prefs = target_user.notification_preferences
+            enabled = getattr(prefs, category, True)  # unknown categories default to enabled
+            if not enabled:
+                return None  # user has opted out — skip silently
+    # ──────────────────────────────────────────────────────────────────────
+
     notification = Notification(
         user_id=user_id,
         type=type,

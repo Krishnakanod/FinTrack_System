@@ -134,11 +134,3 @@ async def health_check():
         db_status = "disconnected"
 
     return {"status": "ok", "db": db_status}
-
-@app.get("/debug-cors")
-async def debug_cors():
-    return {
-        "raw_origins": _raw_origins,
-        "explicit_origins": _explicit_origins,
-        "allow_all": _allow_all,
-    }

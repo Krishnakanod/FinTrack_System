@@ -10,6 +10,7 @@ export interface MemberProfile {
   name: string;
   email: string;
   avatar_url: string | null;
+  upi_id: string | null;
 }
 
 // ===== Group types =====

@@ -105,11 +105,12 @@ async def _send_budget_alert(budget: Budget, current_spend: Decimal, threshold: 
 
     # In-app notification + WebSocket push
     await create_notification(
-        user_id=budget.user_id,
+        user_id=str(budget.user_id),
         type="budget_alert",
         title=title,
         body=body,
         metadata=metadata,
+        category="budget",
     )
 
     # Email alert

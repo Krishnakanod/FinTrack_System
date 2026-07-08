@@ -87,20 +87,24 @@ function getCategoryIcon(category: string): string {
   return icons[category] || "📦";
 }
 
-function getProgressColor(percentage: number): string {
-  if (percentage >= 100) return "bg-red-500";
+function getProgressColor(percentage: number, isOver: boolean, isAtLimit: boolean): string {
+  if (isOver) return "bg-red-500";
+  if (isAtLimit) return "bg-orange-500";
   if (percentage >= 80) return "bg-yellow-500";
   return "bg-green-500";
 }
 
-function getProgressTextColor(percentage: number): string {
-  if (percentage >= 100) return "text-red-600 dark:text-red-400";
+function getProgressTextColor(percentage: number, isOver: boolean, isAtLimit: boolean): string {
+  if (isOver) return "text-red-600 dark:text-red-400";
+  if (isAtLimit) return "text-orange-600 dark:text-orange-400";
   if (percentage >= 80) return "text-yellow-600 dark:text-yellow-400";
   return "text-green-600 dark:text-green-400";
 }
 
-function getBudgetStatusText(percentage: number): string {
-  return percentage >= 100 ? "Over Budget!" : `${percentage}%`;
+function getBudgetStatusText(percentage: number, isOver: boolean, isAtLimit: boolean): string {
+  if (isOver) return "Over Budget!";
+  if (isAtLimit) return "100%";
+  return `${percentage}%`;
 }
 
 // ===== Main Component =====
@@ -145,7 +149,7 @@ export default function BudgetPage() {
     mutationFn: ({ id, data }: { id: string; data: BudgetUpdateInput }) =>
       updateBudget(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-status"] });
+      queryClient.refetchQueries({ queryKey: ["budget-status"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Budget updated successfully");
       setIsAddDialogOpen(false);
@@ -153,7 +157,11 @@ export default function BudgetPage() {
       resetForm();
     },
     onError: (error: ApiError) => {
-      toast.error(error.message || "Failed to update budget");
+      if (error.error === "BUDGET_ALREADY_EXISTS") {
+        toast.error("A budget for this category and period already exists.");
+      } else {
+        toast.error(error.message || "Failed to update budget");
+      }
     },
   });
 
@@ -220,9 +228,27 @@ export default function BudgetPage() {
     }
 
     if (editingBudget) {
+      // Build partial update payload with only changed fields
+      const payload: BudgetUpdateInput = {};
+
+      if (data.category !== editingBudget.category) {
+        payload.category = data.category as any;
+      }
+      if (data.period !== editingBudget.period) {
+        payload.period = data.period as any;
+      }
+      if (Math.abs(amountNum - editingBudget.amount) > 0.001) {
+        payload.amount = amountNum;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        toast.info("No changes detected");
+        return;
+      }
+
       updateMutation.mutate({
         id: editingBudget.id,
-        data: { amount: amountNum },
+        data: payload,
       });
     } else {
       createMutation.mutate({
@@ -271,8 +297,19 @@ export default function BudgetPage() {
     return (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {budgetStatus.map((budget) => {
-          const percentage = budget.percentage_used;
-          const progressColor = getProgressColor(percentage);
+          // Three states based on exact arithmetic (avoids backend rounding artifacts)
+          const isOver     = budget.current_spend >  budget.amount; // strictly over
+          const isAtLimit  = budget.current_spend === budget.amount; // exactly equal
+          const rawPercentage =
+            budget.amount > 0
+              ? (budget.current_spend / budget.amount) * 100
+              : 0;
+          // When not over and not at limit, cap at 99.9 so rounded 100.0 from
+          // backend never displays while "Left: ₹X" is still shown
+          const displayPercentage = isOver || isAtLimit
+            ? 100
+            : Math.min(Math.round(rawPercentage * 10) / 10, 99.9);
+          const progressColor = getProgressColor(displayPercentage, isOver, isAtLimit);
 
           return (
             <Card key={budget.id} className="relative">
@@ -316,25 +353,38 @@ export default function BudgetPage() {
                     </span>
                   </div>
                   <Progress
-                    value={Math.min(percentage, 100)}
+                    value={displayPercentage}
                     className={`h-2 ${progressColor}`}
                   />
                   <div className="flex justify-between mt-1">
-                    <span className={`text-sm font-medium ${getProgressTextColor(percentage)}`}>
-                      {getBudgetStatusText(percentage)}
+                    <span className={`text-sm font-medium ${getProgressTextColor(displayPercentage, isOver, isAtLimit)}`}>
+                      {getBudgetStatusText(displayPercentage, isOver, isAtLimit)}
                     </span>
                     <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                      Left: {formatCurrency(budget.amount - budget.current_spend)}
+                      {isOver
+                        ? `Over by: ${formatCurrency(budget.current_spend - budget.amount)}`
+                        : `Left: ${formatCurrency(budget.amount - budget.current_spend)}`}
                     </span>
                   </div>
                 </div>
 
-                {percentage >= 100 && (
+                {isOver && (
                   <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-red-600 dark:text-red-400" />
                       <span className="text-sm font-medium text-red-800 dark:text-red-200">
                         Exceeded Budget!
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {isAtLimit && (
+                  <div className="mt-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                      <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                        Budget Limit Reached!
                       </span>
                     </div>
                   </div>
@@ -483,14 +533,14 @@ export default function BudgetPage() {
             <AlertDialogDescription>
               Are you sure you want to delete this budget? This action cannot be undone.
               {deletingBudget && (
-                <div className="mt-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
-                  <p className="font-medium">
+                <span className="mt-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800 block">
+                  <span className="font-medium block">
                     {deletingBudget.category} ({deletingBudget.period})
-                  </p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  </span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400 block">
                     Budget: {formatCurrency(deletingBudget.amount)}
-                  </p>
-                </div>
+                  </span>
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

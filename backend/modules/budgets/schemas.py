@@ -1,7 +1,7 @@
 """Budgets module — Pydantic request/response schemas."""
 
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +15,11 @@ class BudgetCreate(BaseModel):
 
 
 class BudgetUpdate(BaseModel):
-    amount: Decimal = Field(gt=0)
+    amount: Optional[Decimal] = Field(default=None, gt=0)
+    category: Optional[ExpenseCategory] = None
+    period: Optional[Literal["daily", "monthly", "quarterly", "yearly"]] = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class BudgetResponse(BaseModel):

@@ -17,6 +17,7 @@ class UserProfileResponse(BaseModel):
     username: str | None = None
     name: str
     avatar_url: str | None = None
+    upi_id: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
@@ -24,6 +25,7 @@ class UpdateProfileRequest(BaseModel):
     name: str | None = None
     username: str | None = None
     avatar_url: str | None = None
+    upi_id: str | None = None
 
 
 # ===== Search Schemas =====
@@ -34,6 +36,7 @@ class UserSearchResult(BaseModel):
     email: str
     name: str
     avatar_url: str | None = None
+    upi_id: str | None = None
 
 
 # ===== Friend Schemas =====
@@ -49,6 +52,7 @@ class FriendResponse(BaseModel):
     name: str
     email: str
     avatar_url: str | None = None
+    upi_id: str | None = None
 
 
 class FriendsListResponse(BaseModel):
@@ -70,3 +74,19 @@ class FriendRequestResponse(BaseModel):
 class FriendRequestsListResponse(BaseModel):
     """Response body for GET /api/v1/users/friends/requests."""
     items: list[FriendRequestResponse]
+
+
+# ===== Notification Preference Schemas =====
+
+class NotificationPreferencesResponse(BaseModel):
+    """Response body for GET /api/v1/users/me/notification-preferences."""
+    friends: bool
+    groups: bool
+    budget: bool
+
+
+class UpdateNotificationPreferencesRequest(BaseModel):
+    """Request body for PUT /api/v1/users/me/notification-preferences."""
+    friends: bool | None = None
+    groups: bool | None = None
+    budget: bool | None = None

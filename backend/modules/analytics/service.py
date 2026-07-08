@@ -33,8 +33,8 @@ from modules.analytics.schemas import (
     TopCategory,
     PersonalAnalyticsResponse,
     GroupSummary,
-    UnsettledSettledItem,
-    MemberContribution,
+    MemberShareItem,
+    MemberBalanceItem,
     GroupAnalyticsResponse,
 )
 from shared.period_utils import get_period_range, get_period_anchor, now_in_ist, decimal_to_float
@@ -168,7 +168,9 @@ async def get_net_balance(user_id: str) -> NetBalanceResponse:
 
 # ===== Recent Activity =====
 
-async def get_recent_activity(user_id: str, limit: int = 10, mode: str = "all") -> RecentActivityResponse:
+async def get_recent_activity(
+    user_id: str, limit: int = 10, mode: str = "all", start: datetime | None = None, end: datetime | None = None
+) -> RecentActivityResponse:
     # Fetch candidates from each source, then merge in Python.
     # We fetch more than `limit` from each source to be safe.
     candidate_limit = max(limit * 3, 20)
@@ -176,8 +178,12 @@ async def get_recent_activity(user_id: str, limit: int = 10, mode: str = "all") 
     items: list[RecentActivityItem] = []
 
     if mode in ("all", "personal"):
-        expenses = await Expense.find({"user_id": user_id}).sort("-date").limit(candidate_limit).to_list()
-        incomes = await Income.find({"user_id": user_id}).sort("-date").limit(candidate_limit).to_list()
+        query: dict[str, Any] = {"user_id": user_id}
+        if start and end:
+            query["date"] = {"$gte": start, "$lte": end}
+
+        expenses = await Expense.find(query).sort("-date").limit(candidate_limit).to_list()
+        incomes = await Income.find(query).sort("-date").limit(candidate_limit).to_list()
 
         for expense in expenses:
             items.append(
@@ -190,6 +196,7 @@ async def get_recent_activity(user_id: str, limit: int = 10, mode: str = "all") 
                     direction="out",
                     created_at=expense.created_at.isoformat(),
                     paid_to_name=expense.paid_to_name,
+                    category=expense.category.value if hasattr(expense.category, "value") else expense.category,
                 )
             )
 
@@ -203,13 +210,19 @@ async def get_recent_activity(user_id: str, limit: int = 10, mode: str = "all") 
                     date=income.date.isoformat(),
                     direction="in",
                     created_at=income.created_at.isoformat(),
+                    source_name=income.source_name,
+                    category=income.source_type.value if hasattr(income.source_type, "value") else income.source_type,
                 )
             )
 
     if mode in ("all", "group"):
         # Group transactions where user OWES money (in splits, NOT paid_by)
+        group_query: dict[str, Any] = {"splits.user_id": user_id}
+        if start and end:
+            group_query["date"] = {"$gte": start, "$lte": end}
+
         group_txs = await GroupTransaction.find(
-            {"splits.user_id": user_id}
+            group_query
         ).sort("-date").limit(candidate_limit).to_list()
 
         group_ids = {gt.group_id for gt in group_txs}
@@ -341,11 +354,13 @@ async def get_personal_analytics(user_id: str, period: str) -> PersonalAnalytics
     income_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     expense_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
 
+    bucket_period = "daily" if period in ("daily", "weekly", "monthly") else "monthly"
+
     for income in incomes:
-        bucket = get_period_anchor(period, income.date)
+        bucket = get_period_anchor(bucket_period, income.date)
         income_buckets[bucket] += income.amount
     for expense in expenses:
-        bucket = get_period_anchor(period, expense.date)
+        bucket = get_period_anchor(bucket_period, expense.date)
         expense_buckets[bucket] += expense.amount
 
     all_buckets = sorted(set(income_buckets.keys()) | set(expense_buckets.keys()))
@@ -390,7 +405,7 @@ async def get_personal_analytics(user_id: str, period: str) -> PersonalAnalytics
     ]
 
     # Recent activity (limit 10) - personal only
-    recent = await get_recent_activity(user_id, limit=10, mode="personal")
+    recent = await get_recent_activity(user_id, limit=10, mode="personal", start=start, end=end)
 
     return PersonalAnalyticsResponse(
         period=period,
@@ -450,45 +465,68 @@ async def get_group_analytics(
 
     unsettled_amount = Decimal("0")
     settled_amount = Decimal("0")
+    member_shares_dict: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for t in transactions:
         for split in t.splits:
+            member_shares_dict[split.user_id] += split.amount_owed
             if split.is_settled:
                 settled_amount += split.amount_owed
             else:
                 unsettled_amount += split.amount_owed
 
-    # Unsettled vs settled
-    unsettled_vs_settled = [
-        UnsettledSettledItem(label="Unsettled", amount=decimal_to_float(unsettled_amount)),
-        UnsettledSettledItem(label="Settled", amount=decimal_to_float(settled_amount)),
-    ]
-
-    # Per-member contribution
-    member_paid: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-    member_owed: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-    for t in transactions:
-        member_paid[t.paid_by] += t.total_amount
-        for split in t.splits:
-            if split.user_id != t.paid_by:
-                member_owed[split.user_id] += split.amount_owed
-
     member_users = await User.find({"_id": {"$in": [PydanticObjectId(uid) for uid in group.members]}}).to_list()
     member_names = {str(u.id): u.name for u in member_users}
 
-    per_member_contribution = [
-        MemberContribution(
-            member_id=member_id,
-            member_name=member_names.get(member_id, "Unknown"),
-            paid=decimal_to_float(amount),
-            owed=decimal_to_float(member_owed[member_id]),
+    total_shares = sum(member_shares_dict.values(), Decimal("0"))
+    member_shares = []
+    if total_shares > 0:
+        for member_id, amount in sorted(member_shares_dict.items(), key=lambda x: x[1], reverse=True):
+            member_shares.append(
+                MemberShareItem(
+                    member_name=member_names.get(member_id, "Unknown"),
+                    amount=decimal_to_float(amount),
+                    percentage=round(decimal_to_float(amount) / decimal_to_float(total_shares) * 100, 1),
+                )
+            )
+
+    # Member-to-Member Balances
+    pairwise_balances: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+    for t in transactions:
+        payer = t.paid_by
+        for split in t.splits:
+            debtor = split.user_id
+            if debtor != payer and not split.is_settled:
+                if debtor < payer:
+                    pairwise_balances[(debtor, payer)] += split.amount_owed
+                else:
+                    pairwise_balances[(payer, debtor)] -= split.amount_owed
+
+    member_balances = []
+    for (a_id, b_id), net in pairwise_balances.items():
+        if net == Decimal("0"):
+            continue
+        a_name = member_names.get(a_id, "Unknown")
+        b_name = member_names.get(b_id, "Unknown")
+        if net > 0:
+            label = f"{a_name} owes {b_name}"
+            amount = net
+        else:
+            label = f"{b_name} owes {a_name}"
+            amount = -net
+        
+        member_balances.append(
+            MemberBalanceItem(
+                label=label,
+                amount=decimal_to_float(amount)
+            )
         )
-        for member_id, amount in sorted(member_paid.items(), key=lambda x: x[1], reverse=True)
-    ]
+    member_balances.sort(key=lambda x: x.amount, reverse=True)
 
     # Spending trend
     spending_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    bucket_period = "daily" if period in ("daily", "weekly", "monthly") else "monthly"
     for t in transactions:
-        bucket = get_period_anchor(period, t.date)
+        bucket = get_period_anchor(bucket_period, t.date)
         spending_buckets[bucket] += t.total_amount
     spending_trend = [
         TrendBucket(label=b, amount=decimal_to_float(amount))
@@ -517,14 +555,14 @@ async def get_group_analytics(
         range=DateRange(start=start_str, end=end_str),
         summary=GroupSummary(
             total_spend=decimal_to_float(total_spend),
-            your_contribution=decimal_to_float(you_paid),
+            your_contribution=decimal_to_float(your_share),
             you_paid=decimal_to_float(you_paid),
             your_share=decimal_to_float(your_share),
             unsettled_amount=decimal_to_float(unsettled_amount),
             settled_amount=decimal_to_float(settled_amount),
         ),
-        unsettled_vs_settled=unsettled_vs_settled,
-        per_member_contribution=per_member_contribution,
+        member_shares=member_shares,
+        member_balances=member_balances,
         spending_trend=spending_trend,
         recent_activity=recent_items,
     )

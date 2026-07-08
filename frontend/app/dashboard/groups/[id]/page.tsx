@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -69,6 +69,7 @@ import {
   type SplitType,
 } from "@/lib/api/groups";
 import { listFriends } from "@/lib/api/friends";
+import { useWebSocketStore } from "@/lib/store/websocket-store";
 
 type SplitMode = "equal" | "custom";
 
@@ -177,12 +178,26 @@ export default function GroupDetailPage() {
     mutationFn: () => exitGroup(groupId),
     onSuccess: () => {
       toast.success("You have left the group");
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
       router.push("/dashboard/groups");
     },
     onError: (error: { message?: string }) => {
       toast.error(error.message || "Failed to exit group");
     },
   });
+
+  // ─── Real-time: refresh group when any member exits ────────────────────────
+  const lastEvent = useWebSocketStore((s) => s.lastEvent);
+  useEffect(() => {
+    if (
+      lastEvent?.type === "GROUP_EVENT" &&
+      (lastEvent.payload as { group_id?: string }).group_id === groupId
+    ) {
+      // Refresh the group details (member list) for all remaining members
+      queryClient.invalidateQueries({ queryKey: ["groups", groupId] });
+    }
+  }, [lastEvent, groupId, queryClient]);
+  // ───────────────────────────────────────────────────────────────────────────
   const addTransactionMutation = useMutation({
     mutationFn: (data: {
       amount: number;
@@ -979,10 +994,12 @@ export default function GroupDetailPage() {
                         <span className="font-medium">
                           {formatCurrency(split.amount_owed)}
                         </span>
-                        {split.is_settled ? (
+                        {split.user_id === selectedTransaction.paid_by ? (
+                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">Paid</Badge>
+                        ) : split.is_settled ? (
                           <Badge variant="secondary">Settled</Badge>
                         ) : (
-                          <Badge variant="outline">Pending</Badge>
+                          <Badge variant="outline" className="text-amber-600 border-amber-200 dark:text-amber-400">Pending</Badge>
                         )}
                       </div>
                     </div>

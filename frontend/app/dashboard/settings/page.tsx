@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LogOut, Moon, Sun, Monitor } from "lucide-react";
+import { LogOut, Moon, Sun, Monitor, Loader2 } from "lucide-react";
 import { useTheme } from "@/lib/theme";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,12 @@ import {
 } from "@/components/ui/card";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { logout, changePassword } from "@/lib/api/auth";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "@/lib/api/notification-preferences";
 import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -30,6 +36,24 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChanging, setIsChanging] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Notification Preferences
+  const { data: prefs, isLoading: isLoadingPrefs } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: getNotificationPreferences,
+  });
+
+  const updatePrefsMutation = useMutation({
+    mutationFn: updateNotificationPreferences,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+      toast.success("Notification preferences updated");
+    },
+    onError: () => {
+      toast.error("Failed to update notification preferences");
+    },
+  });
 
   async function handleLogout() {
     const confirmed = await confirm({
@@ -131,6 +155,81 @@ export default function SettingsPage() {
                 System
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Notification Preferences</CardTitle>
+            <CardDescription>
+              Choose what notifications you want to receive.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingPrefs ? (
+              <div className="flex justify-center p-4">
+                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="pref-friends"
+                    checked={prefs?.friends || false}
+                    onChange={(e) =>
+                      updatePrefsMutation.mutate({ friends: e.target.checked })
+                    }
+                    disabled={updatePrefsMutation.isPending}
+                  />
+                  <div className="space-y-1 leading-none">
+                    <Label htmlFor="pref-friends" className="font-medium cursor-pointer">
+                      Friends Activity
+                    </Label>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      Receive notifications for friend requests, acceptances, and removals.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="pref-groups"
+                    checked={prefs?.groups || false}
+                    onChange={(e) =>
+                      updatePrefsMutation.mutate({ groups: e.target.checked })
+                    }
+                    disabled={updatePrefsMutation.isPending}
+                  />
+                  <div className="space-y-1 leading-none">
+                    <Label htmlFor="pref-groups" className="font-medium cursor-pointer">
+                      Groups Activity
+                    </Label>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      Receive notifications for new transactions, member changes, and group edits.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="pref-budget"
+                    checked={prefs?.budget || false}
+                    onChange={(e) =>
+                      updatePrefsMutation.mutate({ budget: e.target.checked })
+                    }
+                    disabled={updatePrefsMutation.isPending}
+                  />
+                  <div className="space-y-1 leading-none">
+                    <Label htmlFor="pref-budget" className="font-medium cursor-pointer">
+                      Budget Alerts
+                    </Label>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      Receive notifications when your budget reaches 80% or 100%.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

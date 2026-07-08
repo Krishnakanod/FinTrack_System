@@ -41,9 +41,26 @@ export interface NotificationPayload {
   created_at: string;
 }
 
+export interface FriendEventPayload {
+  action:
+    | "request_sent"
+    | "request_accepted"
+    | "request_rejected"
+    | "request_cancelled"
+    | "friend_removed";
+  actor_id: string;
+  target_id: string;
+}
+
+export interface GroupEventPayload {
+  action: "member_exited" | "member_added" | "group_deleted";
+  group_id: string;
+  actor_id: string;
+}
+
 export interface WebSocketEvent {
-  type: "GROUP_TRANSACTION" | "BUDGET_ALERT" | "NOTIFICATION";
-  payload: GroupTransactionPayload | BudgetAlertPayload | NotificationPayload | Record<string, unknown>;
+  type: "GROUP_TRANSACTION" | "BUDGET_ALERT" | "NOTIFICATION" | "FRIEND_EVENT" | "GROUP_EVENT";
+  payload: GroupTransactionPayload | BudgetAlertPayload | NotificationPayload | FriendEventPayload | GroupEventPayload | Record<string, unknown>;
 }
 
 interface WebSocketState {

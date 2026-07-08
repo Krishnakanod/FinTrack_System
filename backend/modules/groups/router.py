@@ -501,3 +501,13 @@ async def get_balance_with_friend(
 ) -> BalanceResponse:
     """Get balance with a specific friend."""
     return await groups_service.get_balance_with_friend(str(current_user.id), friend_id)
+
+
+@router.get("/balances/{friend_id}/transactions", status_code=status.HTTP_200_OK)
+async def get_balance_transactions(
+    friend_id: str,
+    current_user: User = Depends(get_current_user),
+) -> GroupTransactionListResponse:
+    """Get transactions between current user and a friend that contribute to their balance."""
+    items = await groups_service.list_balance_transactions(str(current_user.id), friend_id)
+    return GroupTransactionListResponse(items=items)

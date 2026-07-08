@@ -65,12 +65,15 @@ function formatDate(iso: string) {
 }
 
 function ActivityItemRow({ item }: { item: ActivityItem }) {
+  const primaryTitle = item.paid_to_name || item.source_name || item.description || "Transaction";
+  
   return (
     <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <div>
-        <p className="font-medium">{item.description || "Transaction"}</p>
-        <p className="text-xs text-zinc-500">
-          {item.type.replace("_", " ")}
+        <p className="font-medium">{primaryTitle}</p>
+        <p className="text-xs text-zinc-500 capitalize">
+          {item.category ? `${item.category.replace(/_/g, " ")} • ` : ""}
+          {formatDate(item.date)}
           {item.group_name ? ` • ${item.group_name}` : ""}
         </p>
       </div>
@@ -86,17 +89,43 @@ export default function AnalyticsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const initialTab = searchParams.get("tab") === "group" ? "group" : "personal";
-  const initialGroupId = searchParams.get("groupId") ?? "";
-
-  const [tab, setTab] = useState<"personal" | "group">(initialTab);
+  const [tab, setTab] = useState<"personal" | "group">("personal");
   const [period, setPeriod] = useState<AnalyticsPeriod>("monthly");
-  const [selectedGroupId, setSelectedGroupId] = useState<string>(initialGroupId);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
 
   const [reportStart, setReportStart] = useState<string>("");
   const [reportEnd, setReportEnd] = useState<string>("");
   const [reportFormat, setReportFormat] = useState<"pdf" | "excel">("pdf");
   const [isDownloading, setIsDownloading] = useState(false);
+
+  useEffect(() => {
+    const urlTab = searchParams.get("tab");
+    const urlGroupId = searchParams.get("groupId");
+
+    const savedTab = localStorage.getItem("fintrack_analytics_tab") as "personal" | "group" | null;
+    const savedPeriod = localStorage.getItem("fintrack_analytics_period") as AnalyticsPeriod | null;
+    const savedGroupId = localStorage.getItem("fintrack_analytics_group") as string | null;
+
+    if (urlTab === "group" || urlTab === "personal") {
+      setTab(urlTab);
+    } else if (savedTab === "group" || savedTab === "personal") {
+      setTab(savedTab);
+    }
+    
+    if (savedPeriod) {
+      setPeriod(savedPeriod);
+    }
+
+    if (urlGroupId) {
+      setSelectedGroupId(urlGroupId);
+    } else if (savedGroupId) {
+      setSelectedGroupId(savedGroupId);
+    }
+
+    setIsMounted(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: groupsData } = useQuery({
     queryKey: ["groups"],
@@ -108,24 +137,32 @@ export default function AnalyticsPage() {
   const { data: personalData, isLoading: isPersonalLoading } = useQuery({
     queryKey: ["analytics", "personal", period],
     queryFn: () => getPersonalAnalytics(period),
-    enabled: tab === "personal",
+    enabled: isMounted && tab === "personal",
   });
 
   const { data: groupData, isLoading: isGroupLoading } = useQuery({
     queryKey: ["analytics", "group", selectedGroupId, period],
     queryFn: () => getGroupAnalytics(selectedGroupId, period),
-    enabled: tab === "group" && Boolean(selectedGroupId),
+    enabled: isMounted && tab === "group" && Boolean(selectedGroupId),
   });
 
-  // Sync tab/groupId with URL
+  // Sync state with URL and localStorage
   useEffect(() => {
+    if (!isMounted) return;
+
+    localStorage.setItem("fintrack_analytics_tab", tab);
+    localStorage.setItem("fintrack_analytics_period", period);
+    if (selectedGroupId) {
+      localStorage.setItem("fintrack_analytics_group", selectedGroupId);
+    }
+
     const params = new URLSearchParams();
     params.set("tab", tab);
     if (tab === "group" && selectedGroupId) {
       params.set("groupId", selectedGroupId);
     }
     router.replace(`/dashboard/analytics?${params.toString()}`, { scroll: false });
-  }, [tab, selectedGroupId, router]);
+  }, [tab, selectedGroupId, period, isMounted, router]);
 
   const handleDownload = async () => {
     if (!reportStart || !reportEnd) {
@@ -150,6 +187,14 @@ export default function AnalyticsPage() {
       setIsDownloading(false);
     }
   };
+
+  if (!isMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -412,25 +457,25 @@ function GroupAnalytics({
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Unsettled vs Settled</CardTitle>
-                <CardDescription>Group split status</CardDescription>
+                <CardTitle>Member Share Breakdown</CardTitle>
+                <CardDescription>Percentage of group spend per member</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={data?.unsettled_vs_settled ?? []}
+                      data={data?.member_shares ?? []}
                       dataKey="amount"
-                      nameKey="label"
+                      nameKey="member_name"
                       cx="50%"
                       cy="50%"
                       outerRadius={100}
-                      label={({ label, amount }: any) => `${label}: ${formatCurrency(amount)}`}
+                      label={({ member_name, percentage }: any) => `${member_name} ${percentage}%`}
                     >
-                      {(data?.unsettled_vs_settled ?? []).map((entry, index) => (
+                      {(data?.member_shares ?? []).map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={index === 0 ? "#f59e0b" : "#10b981"}
+                          fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
                         />
                       ))}
                     </Pie>
@@ -443,19 +488,17 @@ function GroupAnalytics({
 
             <Card>
               <CardHeader>
-                <CardTitle>Per-Member Contribution</CardTitle>
-                <CardDescription>Paid vs owed</CardDescription>
+                <CardTitle>Member Balances</CardTitle>
+                <CardDescription>Who owes whom in this period</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={data?.per_member_contribution ?? []} layout="vertical" margin={{ left: 40 }}>
+                  <BarChart data={data?.member_balances ?? []} layout="vertical" margin={{ left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" />
-                    <YAxis dataKey="member_name" type="category" />
+                    <YAxis dataKey="label" type="category" width={120} />
                     <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
-                    <Legend />
-                    <Bar dataKey="paid" name="Paid" fill="#3b82f6" />
-                    <Bar dataKey="owed" name="Owed" fill="#ef4444" />
+                    <Bar dataKey="amount" name="Amount Owed" fill="#ef4444" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

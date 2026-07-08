@@ -9,6 +9,7 @@ export interface AuthUser {
   username: string | null;
   name: string;
   avatar_url: string | null;
+  upi_id: string | null;
 }
 
 interface AuthState {

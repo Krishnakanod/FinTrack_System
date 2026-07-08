@@ -3,6 +3,14 @@
 from datetime import datetime
 from beanie import Document, Indexed
 from typing import Literal
+from pydantic import BaseModel, Field
+
+
+class NotificationPreferences(BaseModel):
+    """Per-user notification opt-in preferences. All default OFF."""
+    friends: bool = False  # friend request events
+    groups: bool = False   # group transactions, member changes, edits
+    budget: bool = False   # budget 80%/100% alerts
 
 
 class User(Document):
@@ -16,8 +24,13 @@ class User(Document):
     failed_login_attempts: int = 0
     locked_until: datetime | None = None
     avatar_url: str | None = None
+    upi_id: str | None = None
+    notification_preferences: NotificationPreferences = Field(
+        default_factory=NotificationPreferences
+    )
     created_at: datetime
     updated_at: datetime
+
 
     class Settings:
         name = "users"

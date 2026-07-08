@@ -39,7 +39,9 @@ export interface BudgetCreateInput {
 }
 
 export interface BudgetUpdateInput {
-  amount: number;
+  amount?: number;
+  category?: ExpenseCategory;
+  period?: BudgetPeriod;
 }
 
 export interface BudgetListResponse {

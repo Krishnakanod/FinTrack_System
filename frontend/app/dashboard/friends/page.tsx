@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Search, UserPlus, Trash2, Loader2, Users, UserX } from "lucide-react";
@@ -33,6 +33,7 @@ import {
   type FriendRequest,
 } from "@/lib/api/friends";
 import type { ApiError } from "@/lib/api/client";
+import { useWebSocketStore } from "@/lib/store/websocket-store";
 
 // ===== Main Component =====
 
@@ -76,7 +77,8 @@ export default function FriendsPage() {
     mutationFn: addFriend,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
-      toast.success("Friend added successfully");
+      queryClient.invalidateQueries({ queryKey: ["friend-requests", "outgoing"] });
+      toast.success("Friend request sent!");
       setSearchResult(null);
       setSearchDone(false);
       setSearchEmail("");
@@ -167,6 +169,19 @@ export default function FriendsPage() {
       removeFriendMutation.mutate(deletingFriend.id);
     }
   }
+
+  // ─── Real-time sync: react to FRIEND_EVENT from any other user ───────────
+  const lastEvent = useWebSocketStore((s) => s.lastEvent);
+  useEffect(() => {
+    if (lastEvent?.type === "FRIEND_EVENT") {
+      // Invalidate all three friend query keys so both the actor
+      // and the other user see changes without reloading.
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["friend-requests", "incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["friend-requests", "outgoing"] });
+    }
+  }, [lastEvent, queryClient]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -472,12 +487,12 @@ export default function FriendsPage() {
               <span className="font-medium">{deletingFriend?.name}</span> from
               your friends list?
               {deletingFriend && (
-                <div className="mt-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
-                  <p className="font-medium">{deletingFriend.name}</p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <span className="mt-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800 block">
+                  <span className="block font-medium">{deletingFriend.name}</span>
+                  <span className="block text-sm text-zinc-600 dark:text-zinc-400">
                     {deletingFriend.email}
-                  </p>
-                </div>
+                  </span>
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

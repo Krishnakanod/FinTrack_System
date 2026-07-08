@@ -19,6 +19,7 @@ class MemberProfile(BaseModel):
     name: str
     email: str
     avatar_url: str | None = None
+    upi_id: str | None = None
 
 
 # ===== Group Request Schemas =====
@@ -157,6 +158,7 @@ class BalanceResponse(BaseModel):
 
     counterpart_id: str
     counterpart_name: str
+    counterpart_upi_id: str | None = None
     net_amount: Decimal
     direction: Literal["you_owe", "owed_to_you", "settled"]
 

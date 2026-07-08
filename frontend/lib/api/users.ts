@@ -8,12 +8,14 @@ export interface UserProfile {
   username: string | null;
   name: string;
   avatar_url: string | null;
+  upi_id: string | null;
 }
 
 export interface UpdateProfileInput {
   name?: string;
   username?: string;
   avatar_url?: string;
+  upi_id?: string;
 }
 
 export async function getProfile(): Promise<UserProfile> {

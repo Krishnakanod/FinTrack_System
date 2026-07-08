@@ -53,16 +53,15 @@ export interface PersonalAnalyticsResponse {
   recent_activity: ActivityItem[];
 }
 
-export interface MemberContribution {
-  member_id: string;
-  member_name: string;
-  paid: number;
-  owed: number;
-}
-
-export interface UnsettledSettledItem {
+export interface MemberBalanceItem {
   label: string;
   amount: number;
+}
+
+export interface MemberShareItem {
+  member_name: string;
+  amount: number;
+  percentage: number;
 }
 
 export interface GroupSummary {
@@ -76,8 +75,8 @@ export interface GroupAnalyticsResponse {
   period: AnalyticsPeriod;
   range: DateRange;
   summary: GroupSummary;
-  unsettled_vs_settled: UnsettledSettledItem[];
-  per_member_contribution: MemberContribution[];
+  member_shares: MemberShareItem[];
+  member_balances: MemberBalanceItem[];
   spending_trend: TrendBucket[];
   recent_activity: ActivityItem[];
 }
@@ -110,6 +109,8 @@ export interface ActivityItem {
   date: string;
   direction: "in" | "out";
   paid_to_name?: string | null;
+  source_name?: string | null;
+  category?: string | null;
   group_id: string | null;
   group_name: string | null;
 }

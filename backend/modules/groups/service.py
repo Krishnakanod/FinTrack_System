@@ -48,6 +48,7 @@ async def _get_user_public_info(user_id: str) -> MemberProfile | None:
         name=user.name,
         email=user.email,
         avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
     )
 
 
@@ -67,6 +68,7 @@ def _make_member_profile(user: User) -> MemberProfile:
         name=user.name,
         email=user.email,
         avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
     )
 
 
@@ -224,6 +226,7 @@ async def update_group(user_id: str, group_id: str, data: GroupUpdate) -> GroupR
                 title="Group Renamed",
                 body=f"{actor.name if actor else 'Someone'} renamed the group to '{group.name}'",
                 metadata={"group_id": group_id},
+                category="groups",
             )
 
     response = await _make_group_response(group)
@@ -320,18 +323,48 @@ async def exit_group(user_id: str, group_id: str) -> None:
     if group.created_by == user_id:
         raise ValueError("CREATOR_CANNOT_EXIT")
 
-    # Check net balance in the group for this user
-    balances = await Balance.find({
-        "user_id": user_id,
-        "counterpart_id": {"$in": group.members},
-    }).to_list()
+    # Check whether this user has any unsettled splits in THIS group's transactions.
+    # We use group transactions as the source of truth rather than the global Balance
+    # collection, which is cross-group and had a bug where user_id was included in
+    # its own counterpart_id $in filter.
+    group_transactions = await GroupTransaction.find(
+        {"group_id": group_id}
+    ).to_list()
 
-    total_balance = sum((b.net_amount for b in balances), Decimal("0"))
-    if total_balance != 0:
+    unsettled_owed_by_user = Decimal("0")   # user owes others (unsettled splits where user is debtor)
+    unsettled_owed_to_user = Decimal("0")   # others owe user (unsettled splits where user paid)
+
+    for txn in group_transactions:
+        for split in txn.splits:
+            if split.is_settled:
+                continue
+            if split.user_id == user_id and txn.paid_by != user_id:
+                # User owes the payer
+                unsettled_owed_by_user += split.amount_owed
+            elif split.user_id != user_id and txn.paid_by == user_id:
+                # Someone else owes the user
+                unsettled_owed_to_user += split.amount_owed
+
+    has_unsettled = unsettled_owed_by_user != Decimal("0") or unsettled_owed_to_user != Decimal("0")
+    if has_unsettled:
         raise ValueError("BALANCE_NOT_ZERO")
 
     group.members.remove(user_id)
     await group.save()
+
+    # Notify remaining members so their group detail page updates in real-time.
+    # Also notify the exiting user so their groups list refreshes.
+    await connection_manager.broadcast(
+        group.members + [user_id],
+        {
+            "type": "GROUP_EVENT",
+            "payload": {
+                "action": "member_exited",
+                "group_id": group_id,
+                "actor_id": user_id,
+            },
+        },
+    )
 
 
 # ===== Group Transactions =====
@@ -435,6 +468,7 @@ async def add_transaction(
             title=f"New expense in {group.name}",
             body=f"{actor_name} added ₹{float(total_amount)} — {data.description}",
             metadata={"group_id": group_id, "transaction_id": str(transaction.id)},
+            category="groups",
         )
 
     # Broadcast a dedicated GROUP_TRANSACTION event for real-time UI refresh.
@@ -574,6 +608,7 @@ async def delete_group_transaction(
             title=f"Transaction deleted in {group.name}",
             body=f"{actor_name} deleted a transaction: {description}",
             metadata={"group_id": group_id, "transaction_id": transaction_id},
+            category="groups",
         )
 
 
@@ -678,6 +713,7 @@ async def update_group_transaction(
             title=f"Transaction updated in {group.name}",
             body=f"{actor_name} updated a transaction: {data.description}",
             metadata={"group_id": group_id, "transaction_id": str(transaction.id)},
+            category="groups",
         )
 
     return _make_transaction_response(transaction)
@@ -724,6 +760,7 @@ async def get_balances(user_id: str) -> BalanceListResponse:
             BalanceResponse(
                 counterpart_id=balance.counterpart_id,
                 counterpart_name=counterpart.name if counterpart else "Unknown",
+                counterpart_upi_id=counterpart.upi_id if counterpart else None,
                 net_amount=net,
                 direction=direction,  # type: ignore[arg-type]
             )
@@ -740,6 +777,7 @@ async def get_balance_with_friend(user_id: str, friend_id: str) -> BalanceRespon
         return BalanceResponse(
             counterpart_id=friend_id,
             counterpart_name="",  # populated below if possible
+            counterpart_upi_id=None,
             net_amount=Decimal("0"),
             direction="settled",
         )
@@ -756,6 +794,19 @@ async def get_balance_with_friend(user_id: str, friend_id: str) -> BalanceRespon
     return BalanceResponse(
         counterpart_id=friend_id,
         counterpart_name=counterpart.name if counterpart else "Unknown",
+        counterpart_upi_id=counterpart.upi_id if counterpart else None,
         net_amount=net,
         direction=direction,  # type: ignore[arg-type]
     )
+
+
+async def list_balance_transactions(user_id: str, friend_id: str) -> list[GroupTransactionResponse]:
+    """List transactions between user and friend that contribute to their balance, sorted by date descending."""
+    transactions = await GroupTransaction.find({
+        "$or": [
+            {"paid_by": user_id, "splits.user_id": friend_id},
+            {"paid_by": friend_id, "splits.user_id": user_id}
+        ]
+    }).sort(-GroupTransaction.date).to_list()
+    
+    return [_make_transaction_response(t) for t in transactions]

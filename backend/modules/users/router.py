@@ -15,6 +15,8 @@ from modules.users.schemas import (
     FriendResponse,
     FriendsListResponse,
     FriendRequestsListResponse,
+    NotificationPreferencesResponse,
+    UpdateNotificationPreferencesRequest,
 )
 from modules.users import service as users_service
 
@@ -53,6 +55,7 @@ async def update_my_profile(
         name=data.name,
         username=data.username,
         avatar_url=data.avatar_url,
+        upi_id=data.upi_id,
     )
     if not profile:
         raise HTTPException(
@@ -277,4 +280,40 @@ async def remove_friend(
                 "message": "Friendship not found.",
                 "details": {},
             },
+        )
+
+
+# ===== Notification Preferences Endpoints =====
+
+@router.get("/me/notification-preferences", status_code=status.HTTP_200_OK)
+async def get_notification_preferences(
+    current_user: User = Depends(get_current_user),
+) -> NotificationPreferencesResponse:
+    """Get the current user's notification opt-in preferences."""
+    try:
+        return await users_service.get_notification_preferences(str(current_user.id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NOT_FOUND", "message": "User not found.", "details": {}},
+        )
+
+
+@router.put("/me/notification-preferences", status_code=status.HTTP_200_OK)
+async def update_notification_preferences(
+    data: UpdateNotificationPreferencesRequest,
+    current_user: User = Depends(get_current_user),
+) -> NotificationPreferencesResponse:
+    """Update the current user's notification preferences (PATCH semantics — only provided fields are changed)."""
+    try:
+        return await users_service.update_notification_preferences(
+            user_id=str(current_user.id),
+            friends=data.friends,
+            groups=data.groups,
+            budget=data.budget,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NOT_FOUND", "message": "User not found.", "details": {}},
         )
