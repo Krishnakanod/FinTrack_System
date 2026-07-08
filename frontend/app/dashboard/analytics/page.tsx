@@ -247,8 +247,8 @@ function PersonalAnalytics({
             <CardTitle>Income vs Expense</CardTitle>
             <CardDescription>Comparison by {data?.period}</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={data?.income_vs_expense ?? []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" />
@@ -267,8 +267,8 @@ function PersonalAnalytics({
             <CardTitle>Spending Trend</CardTitle>
             <CardDescription>Total expense over time</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data?.spending_trend ?? []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" />
@@ -288,8 +288,8 @@ function PersonalAnalytics({
             <CardTitle>Payment Type Breakdown</CardTitle>
             <CardDescription>Spending by payment method</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={data?.payment_type_breakdown ?? []}
@@ -415,8 +415,8 @@ function GroupAnalytics({
                 <CardTitle>Unsettled vs Settled</CardTitle>
                 <CardDescription>Group split status</CardDescription>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={data?.unsettled_vs_settled ?? []}
@@ -446,8 +446,8 @@ function GroupAnalytics({
                 <CardTitle>Per-Member Contribution</CardTitle>
                 <CardDescription>Paid vs owed</CardDescription>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={data?.per_member_contribution ?? []} layout="vertical" margin={{ left: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" />
@@ -467,8 +467,8 @@ function GroupAnalytics({
               <CardTitle>Group Spending Trend</CardTitle>
               <CardDescription>Total group spend over time</CardDescription>
             </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={data?.spending_trend ?? []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />

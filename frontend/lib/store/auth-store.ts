@@ -6,6 +6,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export interface AuthUser {
   id: string;
   email: string;
+  username: string | null;
   name: string;
   avatar_url: string | null;
 }
@@ -13,11 +14,19 @@ export interface AuthUser {
 interface AuthState {
   accessToken: string | null;
   user: AuthUser | null;
+  /** Derived from user — true iff user != null */
   isAuthenticated: boolean;
   /** Whether the persist middleware has finished hydrating from localStorage */
   _hasHydrated: boolean;
+  /** True while a silent token refresh is in-flight — prevents premature logout redirect */
+  isRefreshing: boolean;
+
   setAuth: (accessToken: string, user: AuthUser) => void;
+  setAccessToken: (accessToken: string) => void;
   clearAuth: () => void;
+  /** Force-set hydrated (called from useEffect on mount as a safety net) */
+  forceHydrate: () => void;
+  setIsRefreshing: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,12 +36,21 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       _hasHydrated: false,
+      isRefreshing: false,
 
       setAuth: (accessToken, user) =>
         set({
           accessToken,
           user,
           isAuthenticated: true,
+          _hasHydrated: true,
+          isRefreshing: false,
+        }),
+
+      setAccessToken: (accessToken) =>
+        set({
+          accessToken,
+          isRefreshing: false,
         }),
 
       clearAuth: () =>
@@ -40,25 +58,36 @@ export const useAuthStore = create<AuthState>()(
           accessToken: null,
           user: null,
           isAuthenticated: false,
+          isRefreshing: false,
         }),
+
+      forceHydrate: () =>
+        set((state) => ({
+          _hasHydrated: true,
+          // Derive isAuthenticated from user — single source of truth
+          isAuthenticated: !!state.user,
+        })),
+
+      setIsRefreshing: (v) => set({ isRefreshing: v }),
     }),
     {
       name: "fintrack-auth",
-      // Only persist user — accessToken must NOT survive a hard reload
-      // (security requirement per Spec-03 §1.1)
-      partialize: (state) => ({ user: state.user }),
+      // Only persist user — accessToken must NOT survive a hard reload (security)
+      // isAuthenticated is derived from user so we persist it too for immediate
+      // synchronous access on reload (avoids the flash-redirect-to-login bug).
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: !!state.user,
+      }),
       storage: createJSONStorage(() => localStorage),
-      // Track hydration completion so consumers can wait for it
+      // Auto-set _hasHydrated once the persist middleware finishes reading localStorage.
+      // This fires before any React component renders, eliminating the race between
+      // providers.tsx refresh attempt and dashboard/layout.tsx redirect guard.
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Recompute isAuthenticated from persisted user
-          if (state.user) {
-            state.setAuth(null as any, state.user);
-          }
-          // Use setTimeout to ensure this fires after the initial render
-          setTimeout(() => {
-            useAuthStore.setState({ _hasHydrated: true });
-          }, 0);
+          state._hasHydrated = true;
+          // Re-derive isAuthenticated from user in case localStorage had stale value
+          state.isAuthenticated = !!state.user;
         }
       },
     },

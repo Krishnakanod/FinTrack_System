@@ -23,6 +23,7 @@ def income_to_response(income: Income) -> IncomeResponse:
         id=str(income.id),
         source_type=income.source_type,
         friend_id=income.friend_id,
+        source_name=income.source_name,
         description=income.description,
         amount=income.amount,
         date=income.date.date(),  # Convert datetime to date

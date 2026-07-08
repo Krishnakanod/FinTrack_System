@@ -15,6 +15,7 @@ class Expense(Document):
 
     user_id: str = Indexed()
     category: ExpenseCategory
+    paid_to_name: str | None = None
     description: str
     amount: Decimal
     date: datetime
@@ -22,6 +23,7 @@ class Expense(Document):
     source: Literal["manual", "ocr"]
     ocr_confidence: float | None = None
     receipt_image_url: str | None = None
+    edited: bool = False
     created_at: datetime
     updated_at: datetime
 

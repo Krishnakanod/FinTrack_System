@@ -14,6 +14,7 @@ from modules.users.schemas import (
     AddFriendRequest,
     FriendResponse,
     FriendsListResponse,
+    FriendRequestsListResponse,
 )
 from modules.users import service as users_service
 
@@ -50,6 +51,7 @@ async def update_my_profile(
     profile = await users_service.update_profile(
         user_id=str(current_user.id),
         name=data.name,
+        username=data.username,
         avatar_url=data.avatar_url,
     )
     if not profile:
@@ -88,11 +90,11 @@ async def add_friend(
     data: AddFriendRequest,
     current_user: User = Depends(get_current_user),
 ) -> FriendResponse:
-    """Add a friend by user ID.
+    """Send a friend request.
 
     Locked errors:
     - 400 CANNOT_ADD_SELF
-    - 409 ALREADY_FRIENDS
+    - 409 ALREADY_FRIENDS / PENDING_REQUEST / INCOMING_REQUEST
     - 404 NOT_FOUND (friend doesn't exist)
     """
     try:
@@ -111,7 +113,7 @@ async def add_friend(
                     "details": {},
                 },
             )
-        elif error_code == "ALREADY_FRIENDS":
+        if error_code == "ALREADY_FRIENDS":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
@@ -120,7 +122,25 @@ async def add_friend(
                     "details": {},
                 },
             )
-        elif error_code == "NOT_FOUND":
+        if error_code == "PENDING_REQUEST":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "PENDING_REQUEST",
+                    "message": "A friend request is already pending.",
+                    "details": {},
+                },
+            )
+        if error_code == "INCOMING_REQUEST":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "INCOMING_REQUEST",
+                    "message": "This user has already sent you a friend request.",
+                    "details": {},
+                },
+            )
+        if error_code == "NOT_FOUND":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={
@@ -129,15 +149,114 @@ async def add_friend(
                     "details": {},
                 },
             )
+        raise
 
 
 @router.get("/friends", status_code=status.HTTP_200_OK)
 async def list_friends(
     current_user: User = Depends(get_current_user),
 ) -> FriendsListResponse:
-    """List all friends. Returns alphabetically sorted by name (locked)."""
+    """List all accepted friends. Returns alphabetically sorted by name (locked)."""
     friends = await users_service.list_friends(str(current_user.id))
     return FriendsListResponse(items=friends)
+
+
+@router.get("/friends/requests", status_code=status.HTTP_200_OK)
+async def list_friend_requests(
+    request_type: str = Query(..., alias="type"),
+    current_user: User = Depends(get_current_user),
+) -> FriendRequestsListResponse:
+    """List incoming or outgoing friend requests."""
+    if request_type not in ("incoming", "outgoing"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "INVALID_TYPE",
+                "message": "type must be 'incoming' or 'outgoing'.",
+                "details": {},
+            },
+        )
+    try:
+        items = await users_service.list_friend_requests(
+            str(current_user.id), request_type
+        )
+        return FriendRequestsListResponse(items=items)
+    except ValueError as e:
+        if str(e) == "INVALID_TYPE":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "INVALID_TYPE",
+                    "message": "type must be 'incoming' or 'outgoing'.",
+                    "details": {},
+            },
+        )
+        raise
+
+
+@router.post("/friends/requests/{request_id}/accept", status_code=status.HTTP_200_OK)
+async def accept_friend_request(
+    request_id: str,
+    current_user: User = Depends(get_current_user),
+) -> FriendResponse:
+    """Accept an incoming friend request."""
+    try:
+        return await users_service.accept_friend_request(
+            str(current_user.id), request_id
+        )
+    except ValueError as e:
+        if str(e) == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "NOT_FOUND",
+                    "message": "Friend request not found.",
+                    "details": {},
+                },
+            )
+        raise
+
+
+@router.post("/friends/requests/{request_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_friend_request(
+    request_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Reject an incoming friend request."""
+    try:
+        await users_service.reject_friend_request(str(current_user.id), request_id)
+    except ValueError as e:
+        if str(e) == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "NOT_FOUND",
+                    "message": "Friend request not found.",
+                    "details": {},
+                },
+            )
+        raise
+
+
+@router.post("/friends/requests/{request_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_friend_request(
+    request_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Cancel an outgoing friend request."""
+    try:
+        await users_service.cancel_friend_request(str(current_user.id), request_id)
+    except ValueError as e:
+        if str(e) == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "NOT_FOUND",
+                    "message": "Friend request not found.",
+                    "details": {},
+                },
+            )
+        raise
 
 
 @router.delete("/friends/{friend_id}", status_code=status.HTTP_204_NO_CONTENT)

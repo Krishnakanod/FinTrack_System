@@ -96,6 +96,12 @@ export function TransactionDetailModal({
                   <span className="text-sm text-zinc-500">Payment Type</span>
                   <span>{transaction.payment_type}</span>
                 </div>
+                {(transaction as Expense).paid_to_name && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-500">Paid To / Source Name</span>
+                    <span className="font-medium">{(transaction as Expense).paid_to_name}</span>
+                  </div>
+                )}
               </>
             )}
 

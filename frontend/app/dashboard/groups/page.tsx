@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -86,6 +87,7 @@ function MemberOption({ friend, selected, onToggle }: MemberOptionProps) {
 }
 
 export default function GroupsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -290,10 +292,20 @@ export default function GroupsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="groups-list">
           {filteredGroups.map((group) => (
-            <Link
+            // Outer card is a div (not Link) to avoid <a> inside <a> — the
+            // analytics button inside is its own anchor and must stay separate.
+            <div
               key={group.id}
-              href={`/dashboard/groups/${group.id}`}
+              role="link"
+              tabIndex={0}
               data-testid="group-card"
+              className="cursor-pointer"
+              onClick={() => router.push(`/dashboard/groups/${group.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  router.push(`/dashboard/groups/${group.id}`);
+                }
+              }}
             >
               <Card className="h-full transition-colors hover:border-zinc-400 dark:hover:border-zinc-600">
                 <CardHeader className="pb-2">
@@ -319,6 +331,7 @@ export default function GroupsPage() {
                       View details
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </div>
+                    {/* Standalone Link — no longer inside another anchor */}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -336,7 +349,7 @@ export default function GroupsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+            </div>
           ))}
         </div>
       )}

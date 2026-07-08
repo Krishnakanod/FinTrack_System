@@ -19,6 +19,7 @@ export type PaymentType = "Cash" | "UPI" | "Card" | "Net Banking";
 export interface Expense {
   id: string;
   category: ExpenseCategory;
+  paid_to_name: string | null;
   description: string;
   amount: number;
   date: string; // YYYY-MM-DD
@@ -26,12 +27,14 @@ export interface Expense {
   source: "manual" | "ocr";
   ocr_confidence: number | null;
   receipt_image_url: string | null;
+  edited: boolean;
   created_at: string; // ISO datetime
   updated_at: string; // ISO datetime
 }
 
 export interface ExpenseCreateInput {
   category: ExpenseCategory;
+  paid_to_name?: string | null;
   description?: string;
   amount: number;
   date: string; // YYYY-MM-DD
@@ -40,6 +43,7 @@ export interface ExpenseCreateInput {
 
 export interface ExpenseUpdateInput {
   category?: ExpenseCategory;
+  paid_to_name?: string | null;
   description?: string;
   amount?: number;
   date?: string;
@@ -61,6 +65,7 @@ export interface OcrResult {
 
 export interface OcrConfirmInput {
   category: ExpenseCategory;
+  paid_to_name?: string | null;
   description?: string;
   amount: number;
   date: string;

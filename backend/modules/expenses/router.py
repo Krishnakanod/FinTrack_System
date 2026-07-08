@@ -27,6 +27,7 @@ def expense_to_response(expense: Expense) -> ExpenseResponse:
     return ExpenseResponse(
         id=str(expense.id),
         category=expense.category,
+        paid_to_name=expense.paid_to_name,
         description=expense.description,
         amount=expense.amount,
         date=expense.date.date(),  # Convert datetime to date
@@ -34,6 +35,7 @@ def expense_to_response(expense: Expense) -> ExpenseResponse:
         source=expense.source,
         ocr_confidence=expense.ocr_confidence,
         receipt_image_url=expense.receipt_image_url,
+        edited=expense.edited,
         created_at=expense.created_at.isoformat(),
         updated_at=expense.updated_at.isoformat(),
     )

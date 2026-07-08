@@ -41,9 +41,16 @@ export interface TokenResponse {
   user: AuthUser;
 }
 
+export interface ChangePasswordData {
+  current_password: string;
+  new_password: string;
+  confirm_new_password: string;
+}
+
 export interface MessageResponse {
   message: string;
 }
+
 
 // ===== API Functions =====
 
@@ -93,8 +100,18 @@ export async function resetPassword(
   });
 }
 
+export async function changePassword(
+  data: ChangePasswordData,
+): Promise<MessageResponse> {
+  return apiFetch<MessageResponse>("/api/v1/auth/change-password", {
+    method: "POST",
+    body: data,
+  });
+}
+
 export async function logout(): Promise<MessageResponse> {
   return apiFetch<MessageResponse>("/api/v1/auth/logout", {
     method: "POST",
   });
 }
+

@@ -9,6 +9,7 @@ from modules.auth.schemas import (
     LoginRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    ChangePasswordRequest,
 )
 from modules.auth.exceptions import (
     EmailAlreadyExistsError,
@@ -176,6 +177,7 @@ async def verify_otp(data: VerifyOtpRequest) -> tuple[dict, dict, str]:
     user_response = {
         "id": str(user.id),
         "email": user.email,
+        "username": user.username,
         "name": user.name,
         "avatar_url": user.avatar_url,
     }
@@ -263,6 +265,7 @@ async def login(data: LoginRequest) -> tuple[dict, dict, str]:
     user_response = {
         "id": str(user.id),
         "email": user.email,
+        "username": user.username,
         "name": user.name,
         "avatar_url": user.avatar_url,
     }
@@ -456,3 +459,21 @@ async def logout(refresh_token: str) -> str:
         pass
 
     return "Logged out successfully"
+
+
+# ===== CHANGE PASSWORD =====
+
+async def change_password(user_id: str, data: ChangePasswordRequest) -> str:
+    """Change a logged-in user's password after verifying the current password."""
+    user = await User.get(user_id)
+    if not user:
+        raise InvalidCredentialsError()
+
+    if not security.verify_password(data.current_password, user.password_hash):
+        raise InvalidCredentialsError()
+
+    user.password_hash = security.hash_password(data.new_password)
+    user.updated_at = datetime.now(timezone.utc)
+    await user.save()
+
+    return "Password changed successfully"

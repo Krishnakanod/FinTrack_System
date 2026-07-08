@@ -72,13 +72,10 @@ async function apiFetch<T = unknown>(
 
   // 401 handling: silent refresh + retry once.
   if (response.status === 401 && !_skipRefresh && !PUBLIC_PATHS.has(path)) {
-    const refreshed = await tryRefreshToken();
-    if (refreshed) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
       // Retry the original request with the new token.
-      const newToken = _getAccessToken?.();
-      if (newToken) {
-        (config.headers as Record<string, string>)["Authorization"] = `Bearer ${newToken}`;
-      }
+      (config.headers as Record<string, string>)["Authorization"] = `Bearer ${refreshedToken}`;
       const retryResponse = await fetch(`${API_BASE_URL}${path}`, config);
       if (retryResponse.ok) {
         return (await retryResponse.json()) as T;
@@ -106,22 +103,22 @@ async function apiFetch<T = unknown>(
   return (await response.json()) as T;
 }
 
-async function tryRefreshToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<string | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
-    if (!response.ok) return false;
+    if (!response.ok) return null;
 
     const data = await response.json();
     if (data.access_token) {
       _setAccessToken?.(data.access_token);
-      return true;
+      return data.access_token;
     }
-    return false;
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 

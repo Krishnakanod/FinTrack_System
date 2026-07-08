@@ -16,6 +16,7 @@ class Income(Document):
     user_id: str = Indexed()
     source_type: IncomeSourceType
     friend_id: str | None = None
+    source_name: str | None = None
     description: str
     amount: Decimal
     date: datetime

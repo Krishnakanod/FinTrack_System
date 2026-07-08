@@ -68,6 +68,7 @@ import {
 } from "@/lib/api/income";
 import { listFriends, type FriendProfile } from "@/lib/api/friends";
 import { formatDateIST } from "@/lib/utils/format-date";
+import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
 import type { ApiError } from "@/lib/api/client";
 
 // ===== Form Schema =====
@@ -83,6 +84,10 @@ const incomeSchema = z.object({
 });
 
 type IncomeFormValues = z.infer<typeof incomeSchema>;
+
+// ===== Source mode toggle =====
+
+type SourceMode = "friend" | "manual";
 
 // ===== Helper Functions =====
 
@@ -113,6 +118,16 @@ function getSourceLabel(sourceType: string): string {
   return sourceType === "salary" ? "Salary" : "From Friend";
 }
 
+function getSourceDisplay(income: Income, friendsList: FriendProfile[]): string {
+  if (income.source_type === "salary") return "Salary";
+  if (income.friend_id) {
+    const friend = friendsList.find((f) => f.id === income.friend_id);
+    return friend ? friend.name : "From Friend";
+  }
+  if (income.source_name) return income.source_name;
+  return "From Friend";
+}
+
 // ===== Main Component =====
 
 export default function IncomePage() {
@@ -132,6 +147,9 @@ export default function IncomePage() {
   const [deletingIncome, setDeletingIncome] = useState<Income | null>(null);
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string>("");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("friend");
+  const [sourceName, setSourceName] = useState<string>("");
+  const { confirm, ConfirmModal } = useConfirmModal();
 
   // Fetch friends for "From Friend" dropdown (Sprint 6 — replaces Sprint 5 stub)
   const { data: friendsData } = useQuery({
@@ -270,9 +288,18 @@ export default function IncomePage() {
       payment_type: "",
     });
     setSelectedFriendId("");
+    setSourceName("");
+    setSourceMode("friend");
   }
 
-  function handleEdit(income: Income) {
+  async function handleEdit(income: Income) {
+    const confirmed = await confirm({
+      title: "Confirm Edit",
+      message: "Are you sure you want to edit this income entry?",
+      confirmLabel: "Edit",
+    });
+    if (!confirmed) return;
+
     setEditingIncome(income);
     setValue("source_type", income.source_type);
     setValue("description", income.description || "");
@@ -281,6 +308,16 @@ export default function IncomePage() {
     setValue("payment_type", income.payment_type);
     if (income.friend_id) {
       setSelectedFriendId(income.friend_id);
+      setSourceMode("friend");
+      setSourceName("");
+    } else if (income.source_name) {
+      setSourceName(income.source_name);
+      setSourceMode("manual");
+      setSelectedFriendId("");
+    } else {
+      setSelectedFriendId("");
+      setSourceName("");
+      setSourceMode("friend");
     }
     setIsAddDialogOpen(true);
   }
@@ -297,6 +334,11 @@ export default function IncomePage() {
       return;
     }
 
+    const friendIdForPayload =
+      data.source_type === "from_friend" && sourceMode === "friend" ? selectedFriendId || null : null;
+    const sourceNameForPayload =
+      data.source_type === "from_friend" && sourceMode === "manual" ? sourceName || null : null;
+
     if (editingIncome) {
       // Build partial payload with only changed fields for UPDATE
       const payload: IncomeUpdateInput = {};
@@ -305,16 +347,29 @@ export default function IncomePage() {
         payload.source_type = data.source_type as IncomeSourceType;
       }
 
+      // Reconcile friend_id/source_name based on source mode
+      const currentFriendId =
+        data.source_type === "from_friend" && sourceMode === "friend"
+          ? selectedFriendId || null
+          : null;
+      const currentSourceName =
+        data.source_type === "from_friend" && sourceMode === "manual"
+          ? sourceName || null
+          : null;
+
+      if (currentFriendId !== editingIncome.friend_id) {
+        payload.friend_id = currentFriendId;
+      }
+      if (currentSourceName !== editingIncome.source_name) {
+        payload.source_name = currentSourceName;
+      }
+
       if (data.description !== editingIncome.description) {
         payload.description = data.description || "";
       }
 
       if (Math.abs(amountNum - editingIncome.amount) > 0.001) {
         payload.amount = amountNum;
-      }
-
-      if (data.date !== editingIncome.date) {
-        payload.date = data.date;
       }
 
       if (data.payment_type !== editingIncome.payment_type) {
@@ -331,7 +386,8 @@ export default function IncomePage() {
       // Create NEW income - must include all required fields
       const payload = {
         source_type: data.source_type as IncomeSourceType,
-        friend_id: data.source_type === "from_friend" ? selectedFriendId || null : null,
+        friend_id: friendIdForPayload,
+        source_name: sourceNameForPayload,
         description: data.description || "",
         amount: amountNum,
         date: data.date,
@@ -500,7 +556,7 @@ export default function IncomePage() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span>{getSourceIcon(income.source_type)}</span>
-                          {getSourceLabel(income.source_type)}
+                          {getSourceDisplay(income, friends)}
                         </div>
                       </TableCell>
                       <TableCell>{income.description || "—"}</TableCell>
@@ -558,7 +614,7 @@ export default function IncomePage() {
                       </span>
                       <div>
                         <CardTitle className="text-base">
-                          {getSourceLabel(income.source_type)}
+                          {getSourceDisplay(income, friends)}
                         </CardTitle>
                         <CardDescription>
                           {income.description || "No description"}
@@ -647,33 +703,72 @@ export default function IncomePage() {
                 <p className="text-sm text-red-500">{errors.source_type.message}</p>
               )}
               {watchedSourceType === "from_friend" && (
-                <div className="space-y-2">
-                  <Label htmlFor="friend-select">Select Friend *</Label>
-                  <Select
-                    value={selectedFriendId}
-                    onValueChange={setSelectedFriendId}
-                  >
-                    <SelectTrigger id="friend-select">
-                      <SelectValue placeholder="Choose a friend..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {friends.length === 0 ? (
-                        <div className="px-2 py-4 text-center text-sm text-zinc-500">
-                          No friends in your list. Add friends first.
-                        </div>
-                      ) : (
-                        friends.map((friend) => (
-                          <SelectItem key={friend.id} value={friend.id}>
-                            {friend.name} ({friend.email})
-                          </SelectItem>
-                        ))
+                <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                  <Label>Source Mode</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={sourceMode === "friend" ? "default" : "outline"}
+                      onClick={() => setSourceMode("friend")}
+                      className="w-full"
+                    >
+                      Select Friend
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={sourceMode === "manual" ? "default" : "outline"}
+                      onClick={() => setSourceMode("manual")}
+                      className="w-full"
+                    >
+                      Enter Name
+                    </Button>
+                  </div>
+
+                  {sourceMode === "friend" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="friend-select">Select Friend *</Label>
+                      <Select
+                        value={selectedFriendId}
+                        onValueChange={setSelectedFriendId}
+                      >
+                        <SelectTrigger id="friend-select">
+                          <SelectValue placeholder="Choose a friend..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {friends.length === 0 ? (
+                            <div className="px-2 py-4 text-center text-sm text-zinc-500">
+                              No friends in your list. Add friends first.
+                            </div>
+                          ) : (
+                            friends.map((friend) => (
+                              <SelectItem key={friend.id} value={friend.id}>
+                                {friend.name} ({friend.email})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {watchedSourceType === "from_friend" && !selectedFriendId && (
+                        <p className="text-xs text-zinc-500">
+                          Select a friend to associate with this income
+                        </p>
                       )}
-                    </SelectContent>
-                  </Select>
-                  {watchedSourceType === "from_friend" && !selectedFriendId && (
-                    <p className="text-xs text-zinc-500">
-                      Select a friend to associate with this income
-                    </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="source-name">Source Name *</Label>
+                      <Input
+                        id="source-name"
+                        placeholder="e.g. John, Freelance client"
+                        value={sourceName}
+                        onChange={(e) => setSourceName(e.target.value)}
+                      />
+                      {watchedSourceType === "from_friend" && !sourceName.trim() && (
+                        <p className="text-xs text-zinc-500">
+                          Enter a name to associate with this income
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -708,6 +803,7 @@ export default function IncomePage() {
                 <Input
                   id="date"
                   type="date"
+                  disabled={!!editingIncome}
                   {...register("date")}
                 />
                 {errors.date && (
@@ -815,6 +911,7 @@ export default function IncomePage() {
         open={!!selectedIncome}
         onOpenChange={(open) => !open && setSelectedIncome(null)}
       />
+      <ConfirmModal />
     </div>
   );
 }

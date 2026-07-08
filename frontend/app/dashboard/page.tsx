@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getNetBalance, getRecentActivity, type ActivityItem } from "@/lib/api/analytics";
 import { formatDateIST } from "@/lib/utils/format-date";
+import { useAuthStore } from "@/lib/store/auth-store";
 
 // ===== Presentational Components (extracted in Sprint 5) =====
 
@@ -112,8 +113,22 @@ export function RecentActivityFeed({ items }: { items: ActivityItem[] }) {
                 <div>
                   <p className="font-medium">{getActivityTitle(item)}</p>
                   <p className="text-xs text-zinc-500">
-                    {item.description || "No description"} • {formatDate(item.date)}
-                    {item.group_name ? ` • ${item.group_name}` : ""}
+                    {item.type === "expense" && item.paid_to_name ? (
+                      <>
+                        <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                          {item.paid_to_name}
+                        </span>
+                        {item.description && (
+                          <span> · {item.description}</span>
+                        )}
+                        <span> · {formatDate(item.date)}</span>
+                      </>
+                    ) : (
+                      <>
+                        {item.description || "No description"} · {formatDate(item.date)}
+                        {item.group_name ? ` · ${item.group_name}` : ""}
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -167,22 +182,38 @@ function getActivityTitle(item: ActivityItem): string {
 // ===== Main Component =====
 
 export default function DashboardPage() {
-  const { data: netBalance, isLoading: isLoadingNetBalance } = useQuery({
+  const { accessToken } = useAuthStore((s) => s);
+
+  const { data: netBalance, isLoading: isLoadingNetBalance, error: netBalanceError } = useQuery({
     queryKey: ["analytics", "net-balance"],
     queryFn: () => getNetBalance(),
+    retry: false,
+    enabled: !!accessToken, // Wait for token before firing
   });
 
-  const { data: recentActivity, isLoading: isLoadingRecentActivity } = useQuery({
+  const { data: recentActivity, isLoading: isLoadingRecentActivity, error: recentActivityError } = useQuery({
     queryKey: ["analytics", "recent-activity", 10],
     queryFn: () => getRecentActivity(10),
+    retry: false,
+    enabled: !!accessToken, // Wait for token before firing
   });
 
   const isLoading = isLoadingNetBalance || isLoadingRecentActivity;
+  const hasError = netBalanceError || recentActivityError;
 
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
+        <p className="text-sm text-zinc-500">Failed to load dashboard data. Please try refreshing.</p>
+        <Button onClick={() => window.location.reload()}>Refresh</Button>
       </div>
     );
   }

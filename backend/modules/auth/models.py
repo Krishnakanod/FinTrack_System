@@ -9,6 +9,7 @@ class User(Document):
     """User model for authentication and profile data."""
 
     email: str = Indexed(unique=True)
+    username: str | None = None
     name: str
     password_hash: str
     is_verified: bool = False

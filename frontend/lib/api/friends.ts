@@ -16,6 +16,20 @@ export interface FriendsListResponse {
   items: FriendProfile[];
 }
 
+export interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  sender_name: string;
+  sender_email: string;
+  status: string;
+  created_at: string;
+}
+
+export interface FriendRequestsListResponse {
+  items: FriendRequest[];
+}
+
 // ===== API Functions =====
 
 export async function searchUserByEmail(
@@ -40,5 +54,31 @@ export async function listFriends(): Promise<FriendsListResponse> {
 export async function removeFriend(friendId: string): Promise<void> {
   await apiFetch<void>(`/api/v1/users/friends/${friendId}`, {
     method: "DELETE",
+  });
+}
+
+export async function listFriendRequests(
+  type: "incoming" | "outgoing",
+): Promise<FriendRequestsListResponse> {
+  return apiFetch<FriendRequestsListResponse>(
+    `/api/v1/users/friends/requests?type=${type}`,
+  );
+}
+
+export async function acceptFriendRequest(requestId: string): Promise<FriendProfile> {
+  return apiFetch<FriendProfile>(`/api/v1/users/friends/requests/${requestId}/accept`, {
+    method: "POST",
+  });
+}
+
+export async function rejectFriendRequest(requestId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/users/friends/requests/${requestId}/reject`, {
+    method: "POST",
+  });
+}
+
+export async function cancelFriendRequest(requestId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/users/friends/requests/${requestId}/cancel`, {
+    method: "POST",
   });
 }

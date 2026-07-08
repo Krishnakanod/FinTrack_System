@@ -23,8 +23,9 @@ class Friendship(Document):
 
     requester_id: str = Indexed()
     addressee_id: str = Indexed()
-    status: Literal["pending", "accepted"] = "accepted"
+    status: Literal["pending", "accepted", "rejected", "cancelled"] = "pending"
     created_at: datetime
+    updated_at: datetime | None = None
 
     class Settings:
         name = "friendships"

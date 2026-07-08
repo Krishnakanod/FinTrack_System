@@ -232,7 +232,7 @@ async def update_group(user_id: str, group_id: str, data: GroupUpdate) -> GroupR
 
 
 async def add_member(user_id: str, group_id: str, data: AddMemberRequest) -> GroupResponse:
-    """Add a new member to a group."""
+    """Add a new member to a group. Only the creator can add members."""
     try:
         group = await Group.get(PydanticObjectId(group_id))
     except Exception:
@@ -242,18 +242,21 @@ async def add_member(user_id: str, group_id: str, data: AddMemberRequest) -> Gro
         raise ValueError("NOT_FOUND")
     if user_id not in group.members:
         raise ValueError("NOT_A_MEMBER")
+    if group.created_by != user_id:
+        raise ValueError("NOT_AUTHORIZED")
 
     new_member_id = data.user_id
     if new_member_id in group.members:
         raise ValueError("ALREADY_MEMBER")
 
-    # Optional: ensure new member is a friend of the requesting user
+    # New member must be a friend of the requesting user
     from modules.users.models import Friendship
     is_friend = await Friendship.find_one({
         "$or": [
             {"requester_id": user_id, "addressee_id": new_member_id},
             {"requester_id": new_member_id, "addressee_id": user_id},
-        ]
+        ],
+        "status": "accepted",
     })
     if not is_friend:
         raise ValueError("NOT_FRIEND")
@@ -282,6 +285,53 @@ async def remove_member(user_id: str, group_id: str, member_id: str) -> None:
     if member_id in group.members:
         group.members.remove(member_id)
         await group.save()
+
+
+async def delete_group(user_id: str, group_id: str) -> None:
+    """Delete a group. Only the creator can delete."""
+    try:
+        group = await Group.get(PydanticObjectId(group_id))
+    except Exception:
+        group = None
+
+    if not group:
+        raise ValueError("NOT_FOUND")
+    if user_id not in group.members:
+        raise ValueError("NOT_A_MEMBER")
+    if group.created_by != user_id:
+        raise ValueError("NOT_AUTHORIZED")
+
+    await group.delete()
+
+
+async def exit_group(user_id: str, group_id: str) -> None:
+    """Exit a group. Blocked if the member has a non-zero net balance in the group.
+    The creator cannot exit; they must delete the group instead.
+    """
+    try:
+        group = await Group.get(PydanticObjectId(group_id))
+    except Exception:
+        group = None
+
+    if not group:
+        raise ValueError("NOT_FOUND")
+    if user_id not in group.members:
+        raise ValueError("NOT_A_MEMBER")
+    if group.created_by == user_id:
+        raise ValueError("CREATOR_CANNOT_EXIT")
+
+    # Check net balance in the group for this user
+    balances = await Balance.find({
+        "user_id": user_id,
+        "counterpart_id": {"$in": group.members},
+    }).to_list()
+
+    total_balance = sum((b.net_amount for b in balances), Decimal("0"))
+    if total_balance != 0:
+        raise ValueError("BALANCE_NOT_ZERO")
+
+    group.members.remove(user_id)
+    await group.save()
 
 
 # ===== Group Transactions =====

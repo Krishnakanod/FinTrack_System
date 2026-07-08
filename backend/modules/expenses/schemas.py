@@ -14,6 +14,7 @@ class ExpenseCreate(BaseModel):
     """Request body for creating a manual expense."""
 
     category: ExpenseCategory
+    paid_to_name: Optional[str] = None
     description: str = ""
     amount: Decimal = Field(..., gt=0)
     date: date
@@ -24,6 +25,7 @@ class ExpenseUpdate(BaseModel):
     """Request body for updating an expense (all fields optional)."""
 
     category: Optional[ExpenseCategory] = None
+    paid_to_name: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[Decimal] = Field(default=None, gt=0)
     date: Optional[date] = None
@@ -41,6 +43,7 @@ class OcrConfirmRequest(BaseModel):
     """Request body for confirming an OCR-parsed expense."""
 
     category: ExpenseCategory
+    paid_to_name: Optional[str] = None
     description: str = ""
     amount: Decimal = Field(..., gt=0)
     date: date
@@ -55,6 +58,7 @@ class ExpenseResponse(BaseModel):
 
     id: str
     category: ExpenseCategory
+    paid_to_name: Optional[str] = None
     description: str
     amount: Decimal
     date: date
@@ -62,6 +66,7 @@ class ExpenseResponse(BaseModel):
     source: Literal["manual", "ocr"]
     ocr_confidence: Optional[float] = None
     receipt_image_url: Optional[str] = None
+    edited: Optional[bool] = False
     created_at: str
     updated_at: str
 

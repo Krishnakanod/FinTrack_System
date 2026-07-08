@@ -23,6 +23,7 @@ async def create_expense(user_id: str, data: ExpenseCreate) -> Expense:
     expense = Expense(
         user_id=user_id,
         category=data.category,
+        paid_to_name=data.paid_to_name,
         description=data.description,
         amount=data.amount,
         date=data.date,
@@ -66,6 +67,7 @@ async def confirm_ocr_expense(user_id: str, data: OcrConfirmRequest) -> Expense:
     expense = Expense(
         user_id=user_id,
         category=data.category,
+        paid_to_name=data.paid_to_name,
         description=data.description,
         amount=data.amount,
         date=data.date,
@@ -134,10 +136,14 @@ async def update_expense(user_id: str, expense_id: str, data: ExpenseUpdate) -> 
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    # Date is locked once a transaction exists (Spec B3)
+    update_data.pop("date", None)
+
     if update_data:
         for field, value in update_data.items():
             setattr(expense, field, value)
         expense.updated_at = datetime.now(timezone.utc)
+        expense.edited = True
         await expense.save()
 
     return expense

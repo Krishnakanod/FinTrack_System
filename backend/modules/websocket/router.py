@@ -41,28 +41,41 @@ async def websocket_endpoint(
     # Validate JWT token
     try:
         payload = security.decode_token(token, expected_type="access")
-    except Exception:
+    except Exception as e:
+        print(f"[WS] Token validation failed: {e}")
         await websocket.close(code=4000, reason="invalid token")
         return
 
     # Verify token sub matches path user_id
     token_sub = payload.get("sub")
     if token_sub != user_id:
+        print(f"[WS] User ID mismatch: token sub={token_sub}, path user_id={user_id}")
         await websocket.close(code=4001, reason="user_id mismatch")
         return
 
     # Accept and register connection
-    await connection_manager.connect(user_id, websocket)
+    try:
+        await websocket.accept()
+        print(f"[WS] Connection accepted for user {user_id}")
+        await connection_manager.connect(user_id, websocket)
+        print(f"[WS] Registered user {user_id} in connection manager")
+    except Exception as e:
+        print(f"[WS] Failed to accept/register connection: {e}")
+        return
 
     try:
         # Keep connection alive — tolerate incoming text frames
         # (frontend sends "ping" heartbeat every 30s per Spec-06 §1.9)
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            print(f"[WS] Received message from {user_id}: {data[:50]}...")
     except WebSocketDisconnect:
+        print(f"[WS] Client disconnected normally for {user_id}")
         pass
-    except Exception:
+    except Exception as e:
+        print(f"[WS] Error in connection loop for {user_id}: {e}")
         pass
     finally:
         # Always clean up — don't leak stale connections.
+        print(f"[WS] Cleaning up connection for {user_id}")
         connection_manager.disconnect(user_id)
