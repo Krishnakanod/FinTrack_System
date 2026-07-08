@@ -124,6 +124,18 @@ export async function removeMember(
   });
 }
 
+export async function deleteGroup(groupId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/groups/groups/${groupId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function exitGroup(groupId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/groups/groups/${groupId}/exit`, {
+    method: "POST",
+  });
+}
+
 export async function addTransaction(
   groupId: string,
   data: GroupTransactionCreateInput,

@@ -25,7 +25,12 @@ import {
   addFriend,
   listFriends,
   removeFriend,
+  listFriendRequests,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  cancelFriendRequest,
   type FriendProfile,
+  type FriendRequest,
 } from "@/lib/api/friends";
 import type { ApiError } from "@/lib/api/client";
 
@@ -52,6 +57,20 @@ export default function FriendsPage() {
 
   const friends = data?.items ?? [];
 
+  // Fetch friend requests
+  const { data: incomingData, isLoading: isIncomingLoading } = useQuery({
+    queryKey: ["friend-requests", "incoming"],
+    queryFn: () => listFriendRequests("incoming"),
+  });
+
+  const { data: outgoingData, isLoading: isOutgoingLoading } = useQuery({
+    queryKey: ["friend-requests", "outgoing"],
+    queryFn: () => listFriendRequests("outgoing"),
+  });
+
+  const incomingRequests = incomingData?.items ?? [];
+  const outgoingRequests = outgoingData?.items ?? [];
+
   // Mutations
   const addFriendMutation = useMutation({
     mutationFn: addFriend,
@@ -77,6 +96,40 @@ export default function FriendsPage() {
     },
     onError: (error: ApiError) => {
       toast.error(error.message || "Failed to remove friend");
+    },
+  });
+
+  const acceptRequestMutation = useMutation({
+    mutationFn: acceptFriendRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+      toast.success("Friend request accepted");
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.message || "Failed to accept request");
+    },
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: rejectFriendRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+      toast.success("Friend request rejected");
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.message || "Failed to reject request");
+    },
+  });
+
+  const cancelRequestMutation = useMutation({
+    mutationFn: cancelFriendRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+      toast.success("Friend request cancelled");
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.message || "Failed to cancel request");
     },
   });
 
@@ -286,6 +339,121 @@ export default function FriendsPage() {
                   >
                     <Trash2 className="h-4 w-4 text-red-500" />
                     <span className="ml-1 hidden sm:inline">Remove</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Incoming Friend Requests */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2" data-testid="incoming-requests-title">
+            <UserPlus className="h-5 w-5" />
+            Incoming Requests
+          </CardTitle>
+          <CardDescription>
+            {incomingRequests.length > 0
+              ? `${incomingRequests.length} pending request${incomingRequests.length !== 1 ? "s" : ""}`
+              : "No pending incoming requests"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isIncomingLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+            </div>
+          ) : incomingRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
+              <p className="text-sm text-zinc-500">No incoming friend requests.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {incomingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-lg font-medium dark:bg-zinc-800">
+                      {request.sender_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium">{request.sender_name}</p>
+                      <p className="text-sm text-zinc-500">{request.sender_email}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => acceptRequestMutation.mutate(request.id)}
+                      disabled={acceptRequestMutation.isPending}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => rejectRequestMutation.mutate(request.id)}
+                      disabled={rejectRequestMutation.isPending}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Outgoing Friend Requests */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2" data-testid="outgoing-requests-title">
+            <UserPlus className="h-5 w-5" />
+            Outgoing Requests
+          </CardTitle>
+          <CardDescription>
+            {outgoingRequests.length > 0
+              ? `${outgoingRequests.length} pending request${outgoingRequests.length !== 1 ? "s" : ""}`
+              : "No pending outgoing requests"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isOutgoingLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+            </div>
+          ) : outgoingRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
+              <p className="text-sm text-zinc-500">No outgoing friend requests.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {outgoingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-lg font-medium dark:bg-zinc-800">
+                      {request.sender_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium">{request.sender_name}</p>
+                      <p className="text-sm text-zinc-500">{request.sender_email}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => cancelRequestMutation.mutate(request.id)}
+                    disabled={cancelRequestMutation.isPending}
+                  >
+                    Cancel
                   </Button>
                 </div>
               ))}

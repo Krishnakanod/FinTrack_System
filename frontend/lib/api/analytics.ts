@@ -1,8 +1,7 @@
 // FinTrack Analytics API functions
 // Per Spec-09 §1.6
 
-import { useAuthStore } from "@/lib/store/auth-store";
-import { API_BASE_URL } from "./client";
+import { apiFetch } from "./client";
 
 // ===== Types =====
 
@@ -110,6 +109,7 @@ export interface ActivityItem {
   amount: number;
   date: string;
   direction: "in" | "out";
+  paid_to_name?: string | null;
   group_id: string | null;
   group_name: string | null;
 }
@@ -129,93 +129,56 @@ export interface ReportDownloadInput {
 export async function getPersonalAnalytics(
   period: AnalyticsPeriod,
 ): Promise<PersonalAnalyticsResponse> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/analytics/personal?period=${period}`,
-    {
-      headers: {
-        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-      },
-      credentials: "include",
-    },
+  return apiFetch<PersonalAnalyticsResponse>(
+    `/api/v1/analytics/personal?period=${period}`,
   );
-  if (!res.ok) throw await res.json();
-  return res.json();
 }
 
 export async function getGroupAnalytics(
   groupId: string,
   period: AnalyticsPeriod,
 ): Promise<GroupAnalyticsResponse> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/analytics/group?group_id=${groupId}&period=${period}`,
-    {
-      headers: {
-        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-      },
-      credentials: "include",
-    },
+  return apiFetch<GroupAnalyticsResponse>(
+    `/api/v1/analytics/group?group_id=${groupId}&period=${period}`,
   );
-  if (!res.ok) throw await res.json();
-  return res.json();
 }
 
 export async function getExpenseBreakdown(
   period: AnalyticsPeriod,
 ): Promise<BreakdownResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/expenses?period=${period}`, {
-    headers: {
-      Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-    },
-    credentials: "include",
-  });
-  if (!res.ok) throw await res.json();
-  return res.json();
+  return apiFetch<BreakdownResponse>(`/api/v1/analytics/expenses?period=${period}`);
 }
 
 export async function getIncomeBreakdown(
   period: AnalyticsPeriod,
 ): Promise<BreakdownResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/income?period=${period}`, {
-    headers: {
-      Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-    },
-    credentials: "include",
-  });
-  if (!res.ok) throw await res.json();
-  return res.json();
+  return apiFetch<BreakdownResponse>(`/api/v1/analytics/income?period=${period}`);
 }
 
 export async function getNetBalance(): Promise<NetBalance> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/net-balance`, {
-    headers: {
-      Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-    },
-    credentials: "include",
-  });
-  if (!res.ok) throw await res.json();
-  return res.json();
+  return apiFetch<NetBalance>(`/api/v1/analytics/net-balance`);
 }
 
-export async function getRecentActivity(limit = 10): Promise<RecentActivityResponse> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/analytics/recent-activity?limit=${limit}`,
-    {
-      headers: {
-        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
-      },
-      credentials: "include",
-    },
+export async function getRecentActivity(
+  limit = 10,
+  mode: "all" | "personal" | "group" = "all",
+): Promise<RecentActivityResponse> {
+  return apiFetch<RecentActivityResponse>(
+    `/api/v1/analytics/recent-activity?limit=${limit}&mode=${mode}`,
   );
-  if (!res.ok) throw await res.json();
-  return res.json();
 }
 
 export async function downloadReport(data: ReportDownloadInput): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/reports/download`, {
+  // downloadReport returns a binary blob, not JSON, so keep a raw fetch here
+  // but still attach the current access token manually.
+  const { useAuthStore } = await import("@/lib/store/auth-store");
+  const token = useAuthStore.getState().accessToken;
+
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"}/api/v1/reports/download`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
+      Authorization: `Bearer ${token ?? ""}`,
     },
     body: JSON.stringify(data),
     credentials: "include",

@@ -13,6 +13,7 @@ export interface Income {
   id: string;
   source_type: IncomeSourceType;
   friend_id: string | null;
+  source_name: string | null;
   description: string;
   amount: number;
   date: string; // YYYY-MM-DD
@@ -23,6 +24,7 @@ export interface Income {
 export interface IncomeCreateInput {
   source_type: IncomeSourceType;
   friend_id?: string | null;
+  source_name?: string | null;
   description?: string;
   amount: number;
   date: string; // YYYY-MM-DD
@@ -32,6 +34,7 @@ export interface IncomeCreateInput {
 export interface IncomeUpdateInput {
   source_type?: IncomeSourceType;
   friend_id?: string | null;
+  source_name?: string | null;
   description?: string;
   amount?: number;
   date?: string;

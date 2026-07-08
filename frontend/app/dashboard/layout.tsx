@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
-import { useWebSocket } from "@/lib/websocket";
 import { WebSocketEventListener } from "@/components/dashboard/websocket-event-listener";
+import { useWebSocket } from "@/lib/websocket";
 
 export default function DashboardLayout({
   children,
@@ -16,27 +16,36 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const forceHydrate = useAuthStore((s) => s.forceHydrate);
   const user = useAuthStore((s) => s.user);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
-  const [isLoading, setIsLoading] = useState(true);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isRefreshing = useAuthStore((s) => s.isRefreshing);
 
-  // WebSocket connection — auto-connects when authenticated (Spec-06 §1.9)
+  // MUST be called unconditionally — Rules of Hooks.
+  // The hook self-guards: it skips connection when isAuthenticated/accessToken are absent.
   useWebSocket();
 
+  // Safety net: force-derive isAuthenticated from user if onRehydrateStorage
+  // hasn't already done so (e.g. very first visit with no localStorage data).
   useEffect(() => {
-    // Wait for Zustand persist hydration to complete before checking auth
-    if (!hasHydrated) return;
+    forceHydrate();
+  }, [forceHydrate]);
 
-    if (!user) {
+  // Redirect to login only when:
+  //   • hydration is settled (not still refreshing), AND
+  //   • there is no user in state
+  // This prevents the premature redirect that caused the reload logout bug.
+  useEffect(() => {
+    if (!isRefreshing && !user) {
+      console.log("[DashboardLayout] Not authenticated after refresh attempt — redirecting to /login");
       router.replace("/login");
-      return;
     }
+  }, [user, isRefreshing, router]);
 
-    setIsLoading(false);
-  }, [user, hasHydrated, router]);
-
-  // Show loading state while checking auth / waiting for hydration
-  if (isLoading) {
+  // Show loader while:
+  //   • a silent token refresh is in-flight (isRefreshing), OR
+  //   • hydration hasn't settled yet and we have no user
+  if (isRefreshing || (!user && !isAuthenticated)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="flex flex-col items-center gap-4">
@@ -47,11 +56,7 @@ export default function DashboardLayout({
     );
   }
 
-  // Not authenticated — don't render children (redirect is happening)
-  if (!user) {
-    return null;
-  }
-
+  // All checks passed — render the dashboard shell
   return (
     <>
       <WebSocketEventListener />

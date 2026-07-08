@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Upload, Loader2, AlertTriangle, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Loader2, AlertTriangle, Search, X, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,7 @@ import type { ApiError } from "@/lib/api/client";
 
 const expenseSchema = z.object({
   category: z.string().min(1, "Category is required"),
+  paid_to_name: z.string().optional(),
   description: z.string().optional(),
   amount: z.string().min(1, "Amount is required"),
   date: z
@@ -127,6 +128,41 @@ function getCategoryIcon(category: string): string {
   return icons[category] || "📦";
 }
 
+function ExpenseBillContent({ expense }: { expense: Expense }) {
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="text-center">
+        <h2 className="text-3xl font-bold text-zinc-900">Expense Bill</h2>
+        <p className="text-sm text-zinc-500">FinTrack</p>
+      </div>
+      {expense.edited && (
+        <div className="my-8 text-center">
+          <span className="inline-block -rotate-12 border-4 border-red-500 px-6 py-2 text-3xl font-black uppercase tracking-widest text-red-500">
+            EDITED
+          </span>
+        </div>
+      )}
+      <div className="mt-8 space-y-1">
+        <BillRow label="Description" value={expense.description || "—"} />
+        <BillRow label="Amount" value={formatCurrency(expense.amount)} />
+        <BillRow label="Date" value={formatDate(expense.date)} />
+        <BillRow label="Category" value={expense.category} />
+        <BillRow label="Payment Type" value={expense.payment_type} />
+        {expense.paid_to_name && <BillRow label="Paid To" value={expense.paid_to_name} />}
+      </div>
+    </div>
+  );
+}
+
+function BillRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between border-b border-zinc-200 py-3">
+      <span className="font-semibold text-zinc-600">{label}</span>
+      <span className="text-zinc-900">{value}</span>
+    </div>
+  );
+}
+
 // ===== Main Component =====
 
 export default function ExpensesPage() {
@@ -143,6 +179,7 @@ export default function ExpensesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [printExpense, setPrintExpense] = useState<Expense | null>(null);
 
   const { confirm, ConfirmModal } = useConfirmModal();
 
@@ -182,7 +219,8 @@ export default function ExpensesPage() {
     const query = searchQuery.toLowerCase();
     return (
       expense.description?.toLowerCase().includes(query) ||
-      expense.category.toLowerCase().includes(query)
+      expense.category.toLowerCase().includes(query) ||
+      expense.paid_to_name?.toLowerCase().includes(query)
     );
   });
 
@@ -271,6 +309,7 @@ export default function ExpensesPage() {
   function resetForm() {
     reset({
       category: "",
+      paid_to_name: "",
       description: "",
       amount: "",
       date: getTodayIST(),
@@ -288,6 +327,7 @@ export default function ExpensesPage() {
 
     setEditingExpense(expense);
     setValue("category", expense.category);
+    setValue("paid_to_name", expense.paid_to_name || "");
     setValue("description", expense.description || "");
     setValue("amount", String(expense.amount));
     setValue("date", expense.date.split("T")[0]);
@@ -321,16 +361,17 @@ export default function ExpensesPage() {
         payload.category = data.category as ExpenseCategory;
       }
 
+      const currentPaidToName = data.paid_to_name || null;
+      if (currentPaidToName !== editingExpense.paid_to_name) {
+        payload.paid_to_name = currentPaidToName;
+      }
+
       if (data.description !== editingExpense.description) {
         payload.description = data.description || "";
       }
 
       if (Math.abs(amountNum - editingExpense.amount) > 0.001) {
         payload.amount = amountNum;
-      }
-
-      if (data.date !== editingExpense.date) {
-        payload.date = data.date;
       }
 
       if (data.payment_type !== editingExpense.payment_type) {
@@ -347,6 +388,7 @@ export default function ExpensesPage() {
       // OCR confirm flow - must include all required fields
       confirmOcrExpense({
         category: data.category as ExpenseCategory,
+        paid_to_name: data.paid_to_name || null,
         description: data.description || "",
         amount: amountNum,
         date: data.date,
@@ -367,6 +409,7 @@ export default function ExpensesPage() {
       // Create NEW expense - must include all required fields
       const payload = {
         category: data.category as ExpenseCategory,
+        paid_to_name: data.paid_to_name || null,
         description: data.description || "",
         amount: amountNum,
         date: data.date,
@@ -561,6 +604,7 @@ export default function ExpensesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Category</TableHead>
+                    <TableHead>Paid To</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Date</TableHead>
@@ -582,6 +626,15 @@ export default function ExpensesPage() {
                           {expense.category}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {expense.paid_to_name ? (
+                          <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                            {expense.paid_to_name}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>{expense.description || "—"}</TableCell>
                       <TableCell className="font-semibold">
                         {formatCurrency(expense.amount)}
@@ -599,6 +652,16 @@ export default function ExpensesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPrintExpense(expense);
+                            }}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -646,6 +709,11 @@ export default function ExpensesPage() {
                         <CardTitle className="text-base">
                           {expense.category}
                         </CardTitle>
+                        {expense.paid_to_name && (
+                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                            {expense.paid_to_name}
+                          </p>
+                        )}
                         <CardDescription>
                           {expense.description || "No description"}
                         </CardDescription>
@@ -672,6 +740,16 @@ export default function ExpensesPage() {
                       </Badge>
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPrintExpense(expense);
+                        }}
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -814,6 +892,15 @@ export default function ExpensesPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="paid_to_name">Paid To / Source Name</Label>
+              <Input
+                id="paid_to_name"
+                placeholder="e.g. Grocery store, friend name"
+                {...register("paid_to_name")}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
@@ -828,6 +915,7 @@ export default function ExpensesPage() {
                 <Input
                   id="date"
                   type="date"
+                  disabled={!!editingExpense}
                   {...register("date")}
                 />
                 {errors.date && (
@@ -884,6 +972,37 @@ export default function ExpensesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={!!printExpense} onOpenChange={(open) => !open && setPrintExpense(null)}>
+        <DialogContent className="max-w-2xl print:hidden">
+          <DialogHeader>
+            <DialogTitle>Print Expense Bill</DialogTitle>
+            <DialogDescription>
+              Review the bill details before printing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6">
+            {printExpense && <ExpenseBillContent expense={printExpense} />}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintExpense(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden print-only bill */}
+      {printExpense && (
+        <div className="hidden print:fixed print:inset-0 print:z-[9999] print:block print:overflow-auto print:bg-white print:p-12">
+          <ExpenseBillContent expense={printExpense} />
+        </div>
+      )}
 
       <TransactionDetailModal
         transaction={selectedExpense}

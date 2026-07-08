@@ -83,6 +83,25 @@ class ResetPasswordRequest(BaseModel):
         return self
 
 
+class ChangePasswordRequest(BaseModel):
+    """Request body for changing password while logged in."""
+
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+    confirm_new_password: str
+
+    @model_validator(mode="after")
+    def validate_change_password(self):
+        """Validate password complexity and confirm password match."""
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("Passwords do not match.")
+        if not re.search(r"[a-zA-Z]", self.new_password):
+            raise ValueError("Password must contain at least one letter.")
+        if not re.search(r"[0-9]", self.new_password):
+            raise ValueError("Password must contain at least one number.")
+        return self
+
+
 # ===== Response Schemas =====
 
 class TokenResponse(BaseModel):

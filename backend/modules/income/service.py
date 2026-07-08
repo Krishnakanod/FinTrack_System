@@ -15,6 +15,7 @@ async def create_income(user_id: str, data: IncomeCreate) -> Income:
         user_id=user_id,
         source_type=data.source_type,
         friend_id=data.friend_id,
+        source_name=data.source_name,
         description=data.description,
         amount=data.amount,
         date=data.date,
@@ -79,9 +80,13 @@ async def update_income(user_id: str, income_id: str, data: IncomeUpdate) -> Opt
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    # Date is locked once a transaction exists (Spec B3)
+    update_data.pop("date", None)
+
     if update_data:
         for field, value in update_data.items():
             setattr(income, field, value)
+        income.updated_at = datetime.now(timezone.utc)
         await income.save()
 
     return income

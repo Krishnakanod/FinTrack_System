@@ -165,6 +165,15 @@ async def add_member(
                     "details": {},
                 },
             )
+        if code == "NOT_AUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_AUTHORIZED",
+                    "message": "Only the group creator can add members to this group.",
+                    "details": {},
+                },
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -191,6 +200,91 @@ async def remove_member(
                 detail={
                     "error": "NOT_A_MEMBER",
                     "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "Group not found.",
+                "details": {},
+            },
+        )
+
+
+@router.delete("/groups/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_group(
+    group_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a group. Only the creator can delete."""
+    try:
+        await groups_service.delete_group(str(current_user.id), group_id)
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_A_MEMBER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_A_MEMBER",
+                    "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        if code == "NOT_AUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_AUTHORIZED",
+                    "message": "Only the group creator can delete the group.",
+                    "details": {},
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "Group not found.",
+                "details": {},
+            },
+        )
+
+
+@router.post("/groups/groups/{group_id}/exit", status_code=status.HTTP_204_NO_CONTENT)
+async def exit_group(
+    group_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Exit a group. Blocked if the member has a non-zero balance."""
+    try:
+        await groups_service.exit_group(str(current_user.id), group_id)
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_A_MEMBER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "NOT_A_MEMBER",
+                    "message": "You are not a member of this group.",
+                    "details": {},
+                },
+            )
+        if code == "CREATOR_CANNOT_EXIT":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "CREATOR_CANNOT_EXIT",
+                    "message": "The group creator must delete the group instead of exiting.",
+                    "details": {},
+                },
+            )
+        if code == "BALANCE_NOT_ZERO":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "BALANCE_NOT_ZERO",
+                    "message": "Settle your balance before exiting this group.",
                     "details": {},
                 },
             )

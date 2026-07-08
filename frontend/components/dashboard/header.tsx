@@ -8,6 +8,7 @@ import { LogOut, User, Bell, Mail, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { logout } from "@/lib/api/auth";
+import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,7 @@ export function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const { confirm, ConfirmModal } = useConfirmModal();
 
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -113,6 +115,13 @@ export function Header() {
   };
 
   async function handleLogout() {
+    const confirmed = await confirm({
+      title: "Log Out",
+      message: "Are you sure you want to log out?",
+      confirmLabel: "Log Out",
+    });
+    if (!confirmed) return;
+
     setIsLoggingOut(true);
     try {
       await logout();
@@ -127,7 +136,8 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-6 dark:border-zinc-800 dark:bg-zinc-950">
+    <>
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-6 dark:border-zinc-800 dark:bg-zinc-950">
       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
       </h2>
@@ -237,5 +247,7 @@ export function Header() {
         </Button>
       </div>
     </header>
+    <ConfirmModal />
+    </>
   );
 }

@@ -36,9 +36,19 @@ app = FastAPI(
 )
 
 # CORS middleware
+# When allow_credentials=True, browsers require the response to echo back the
+# exact requesting origin — NOT "*". Using allow_origin_regex covers all
+# origins while staying compatible with credentialed requests.
+_raw_origins = settings.cors_origins_list
+_explicit_origins = [o for o in _raw_origins if o != "*"]
+_allow_all = "*" in _raw_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=_explicit_origins,
+    # If "*" was in the env list, fall back to a regex that matches everything.
+    # This is the only approach that works with allow_credentials=True.
+    allow_origin_regex=r".*" if _allow_all else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,3 +134,11 @@ async def health_check():
         db_status = "disconnected"
 
     return {"status": "ok", "db": db_status}
+
+@app.get("/debug-cors")
+async def debug_cors():
+    return {
+        "raw_origins": _raw_origins,
+        "explicit_origins": _explicit_origins,
+        "allow_all": _allow_all,
+    }

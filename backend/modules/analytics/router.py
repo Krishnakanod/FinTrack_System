@@ -93,9 +93,10 @@ async def get_net_balance(
 @router.get("/recent-activity")
 async def get_recent_activity(
     limit: int = 10,
+    mode: str = "all",
     current_user: User = Depends(get_current_user),
 ) -> RecentActivityResponse:
-    return await service.get_recent_activity(str(current_user.id), limit)
+    return await service.get_recent_activity(str(current_user.id), limit, mode)
 
 
 @reports_router.post("/download")

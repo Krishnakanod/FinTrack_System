@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -18,6 +18,8 @@ import {
   Trash2,
   Users,
   X,
+  LogOut,
+  UserPlus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -52,20 +54,21 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useConfirmModal } from "@/lib/hooks/use-confirm-modal";
 import {
-  BarChart3,
-} from "lucide-react";
-import {
   getGroup,
   listGroupTransactions,
   addTransaction,
+  addMember,
   updateGroup,
   updateGroupTransaction,
   deleteGroupTransaction,
+  deleteGroup,
+  exitGroup,
   type Group,
   type GroupTransaction,
   type MemberProfile,
   type SplitType,
 } from "@/lib/api/groups";
+import { listFriends } from "@/lib/api/friends";
 
 type SplitMode = "equal" | "custom";
 
@@ -102,6 +105,7 @@ export default function GroupDetailPage() {
   const params = useParams<{ id: string }>();
   const groupId = params.id;
   const queryClient = useQueryClient();
+  const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
   const { confirm, ConfirmModal } = useConfirmModal();
 
@@ -122,6 +126,8 @@ export default function GroupDetailPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [nameError, setNameError] = useState("");
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string>("");
 
   const { data: group, isLoading: isGroupLoading } = useQuery({
     queryKey: ["groups", groupId],
@@ -137,6 +143,46 @@ export default function GroupDetailPage() {
     },
   );
 
+  const { data: friendsData } = useQuery({
+    queryKey: ["friends"],
+    queryFn: () => listFriends(),
+    enabled: !!groupId && isAddMemberOpen,
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: (userId: string) => addMember(groupId, userId),
+    onSuccess: () => {
+      toast.success("Member added");
+      queryClient.invalidateQueries({ queryKey: ["groups", groupId] });
+      setSelectedFriendId("");
+      setIsAddMemberOpen(false);
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to add member");
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: () => deleteGroup(groupId),
+    onSuccess: () => {
+      toast.success("Group deleted");
+      router.push("/dashboard/groups");
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to delete group");
+    },
+  });
+
+  const exitGroupMutation = useMutation({
+    mutationFn: () => exitGroup(groupId),
+    onSuccess: () => {
+      toast.success("You have left the group");
+      router.push("/dashboard/groups");
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to exit group");
+    },
+  });
   const addTransactionMutation = useMutation({
     mutationFn: (data: {
       amount: number;
@@ -382,12 +428,51 @@ export default function GroupDetailPage() {
             Back
           </Link>
         </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/dashboard/analytics?tab=group&groupId=${groupId}`}>
-            <BarChart3 className="mr-2 h-4 w-4" />
-            View Analytics
-          </Link>
-        </Button>
+        {currentUser?.id === group?.created_by && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsAddMemberOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Member
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                const confirmed = await confirm({
+                  message: "This group and all its transactions will be permanently deleted.",
+                  confirmLabel: "Delete",
+                  confirmVariant: "destructive",
+                });
+                if (confirmed) {
+                  deleteGroupMutation.mutate();
+                }
+              }}
+              disabled={deleteGroupMutation.isPending}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Group
+            </Button>
+          </>
+        )}
+        {currentUser?.id !== group?.created_by && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const confirmed = await confirm({
+                message: "You will be removed from this group.",
+                confirmLabel: "Exit",
+              });
+              if (confirmed) {
+                exitGroupMutation.mutate();
+              }
+            }}
+            disabled={exitGroupMutation.isPending}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Exit Group
+          </Button>
+        )}
         <div className="flex-1">
           {isEditingName ? (
             <div className="flex items-center gap-2">
@@ -950,6 +1035,67 @@ export default function GroupDetailPage() {
         </DialogContent>
       </Dialog>
       <ConfirmModal />
+      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+            <DialogDescription>
+              Select a friend to add to this group.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Select value={selectedFriendId} onValueChange={setSelectedFriendId}>
+              <SelectTrigger id="friend-select">
+                <SelectValue placeholder="Select a friend" />
+              </SelectTrigger>
+              <SelectContent>
+                {(() => {
+                  const memberIds = new Set(members.map((m) => m.id));
+                  const availableFriends =
+                    friendsData?.items.filter((f) => !memberIds.has(f.id)) ?? [];
+                  return availableFriends.length === 0 ? (
+                    <SelectItem value="no-friends" disabled>
+                      No available friends
+                    </SelectItem>
+                  ) : (
+                    availableFriends.map((friend) => (
+                      <SelectItem key={friend.id} value={friend.id}>
+                        {friend.name} ({friend.email})
+                      </SelectItem>
+                    ))
+                  );
+                })()}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddMemberOpen(false);
+                setSelectedFriendId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!selectedFriendId) {
+                  toast.error("Select a friend to add");
+                  return;
+                }
+                addMemberMutation.mutate(selectedFriendId);
+              }}
+              disabled={!selectedFriendId || addMemberMutation.isPending}
+            >
+              {addMemberMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

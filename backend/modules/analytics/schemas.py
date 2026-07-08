@@ -55,6 +55,7 @@ class RecentActivityItem(BaseModel):
     date: str
     direction: Literal["in", "out"]
     created_at: str | None = None
+    paid_to_name: str | None = None
     group_id: str | None = None
     group_name: str | None = None
 
@@ -122,6 +123,8 @@ class MemberContribution(BaseModel):
 class GroupSummary(BaseModel):
     total_spend: float
     your_contribution: float
+    you_paid: float
+    your_share: float
     unsettled_amount: float
     settled_amount: float
 

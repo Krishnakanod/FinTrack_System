@@ -17,8 +17,6 @@ import {
   User,
   Menu,
   X,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -130,11 +128,7 @@ export function Sidebar() {
             className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
+            <Menu className="h-4 w-4" />
           </button>
         </div>
 
@@ -142,7 +136,8 @@ export function Sidebar() {
         <nav className="flex flex-col gap-1 p-2">
           {navItems.map((item) => {
             const isActive =
-              pathname === item.href || pathname.startsWith(item.href + "/");
+              pathname === item.href ||
+              (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
             const Icon = item.icon;
 
             const link = (

@@ -10,6 +10,7 @@ from modules.auth.schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     ResendOtpRequest,
+    ChangePasswordRequest,
 )
 from modules.auth import service as auth_service
 from modules.auth.exceptions import (
@@ -22,7 +23,7 @@ from modules.auth.exceptions import (
 )
 from core.security import decode_token, hash_otp_simple, create_access_token
 from core.deps import get_current_user
-from modules.auth.models import RefreshToken
+from modules.auth.models import User, RefreshToken
 
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -277,6 +278,28 @@ async def logout(
     return response
 
 
+# ===== CHANGE PASSWORD =====
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Change the current user's password after verifying the current password."""
+    try:
+        message = await auth_service.change_password(str(current_user.id), request)
+        return {"message": message}
+    except InvalidCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "INVALID_CREDENTIALS",
+                "message": "Current password is incorrect.",
+                "details": {},
+            },
+        )
+
+
 # ===== PROTECTED PROFILE (dummy, for verifying get_current_user works) =====
 
 @router.get("/me", status_code=status.HTTP_200_OK)
@@ -290,6 +313,7 @@ async def get_me(user=Depends(get_current_user)):
     return {
         "id": str(user.id),
         "email": user.email,
+        "username": user.username,
         "name": user.name,
         "avatar_url": user.avatar_url,
     }
