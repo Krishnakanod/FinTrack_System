@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal";
 import {
   listIncome,
   createIncome,
@@ -117,7 +119,9 @@ export default function IncomePage() {
   const queryClient = useQueryClient();
 
   // Filter state
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterSourceType, setFilterSourceType] = useState<string>("");
+  const [filterPaymentType, setFilterPaymentType] = useState<string>("");
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
 
@@ -126,6 +130,7 @@ export default function IncomePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   const [deletingIncome, setDeletingIncome] = useState<Income | null>(null);
+  const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string>("");
 
   // Fetch friends for "From Friend" dropdown (Sprint 6 — replaces Sprint 5 stub)
@@ -138,6 +143,8 @@ export default function IncomePage() {
 
   const incomeSourceTypeFilter =
     filterSourceType && filterSourceType !== "all" ? filterSourceType : undefined;
+  const incomePaymentTypeFilter =
+    filterPaymentType && filterPaymentType !== "all" ? filterPaymentType : undefined;
 
   // Fetch income
   const { data, isLoading } = useQuery({
@@ -145,6 +152,7 @@ export default function IncomePage() {
       "income",
       {
         source_type: incomeSourceTypeFilter ?? null,
+        payment_type: incomePaymentTypeFilter ?? null,
         date_from: filterDateFrom ?? null,
         date_to: filterDateTo ?? null,
       },
@@ -152,17 +160,31 @@ export default function IncomePage() {
     queryFn: () =>
       listIncome({
         source_type: incomeSourceTypeFilter,
+        payment_type: incomePaymentTypeFilter,
         date_from: filterDateFrom || undefined,
         date_to: filterDateTo || undefined,
       }),
   });
 
-  const incomes = data?.items ?? [];
+  const rawIncomes = data?.items ?? [];
+
+  const filteredIncomes = rawIncomes.filter((income) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      income.description?.toLowerCase().includes(query) ||
+      income.source_type.toLowerCase().includes(query)
+    );
+  });
+
+  const incomes = filteredIncomes;
 
   const areFiltersActive =
     (filterSourceType && filterSourceType !== "all") ||
+    (filterPaymentType && filterPaymentType !== "all") ||
     Boolean(filterDateFrom) ||
-    Boolean(filterDateTo);
+    Boolean(filterDateTo) ||
+    Boolean(searchQuery);
 
   // Mutations
   const createMutation = useMutation({
@@ -231,18 +253,12 @@ export default function IncomePage() {
   const watchedSourceType = watch("source_type");
   const watchedPaymentType = watch("payment_type");
 
-  function handleDateFromChange(value: string) {
-    setFilterDateFrom(value);
-    if (filterDateTo && value > filterDateTo) {
-      setFilterDateTo(value);
-    }
-  }
-
-  function handleDateToChange(value: string) {
-    setFilterDateTo(value);
-    if (filterDateFrom && value < filterDateFrom) {
-      setFilterDateFrom(value);
-    }
+  function handleClearFilters() {
+    setSearchQuery("");
+    setFilterSourceType("");
+    setFilterPaymentType("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
   }
 
   function resetForm() {
@@ -345,7 +361,20 @@ export default function IncomePage() {
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="search">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  id="search"
+                  placeholder="Search income..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Source Type</Label>
               <Select
@@ -363,25 +392,46 @@ export default function IncomePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>From Date</Label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => handleDateFromChange(e.target.value)}
-              />
+              <Label>Payment Type</Label>
+              <Select
+                value={filterPaymentType}
+                onValueChange={setFilterPaymentType}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All payment types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All payment types</SelectItem>
+                  {PAYMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>To Date</Label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => handleDateToChange(e.target.value)}
+            <div className="space-y-2 md:col-span-1">
+              <div className="flex items-center justify-between">
+                {areFiltersActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="h-auto py-0 text-xs text-zinc-500 hover:text-zinc-900"
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+              <DateRangePicker
+                from={filterDateFrom}
+                to={filterDateTo}
+                onFromChange={setFilterDateFrom}
+                onToChange={setFilterDateTo}
               />
             </div>
           </div>
-          <p className="mt-2 text-xs text-zinc-500">
-            From date cannot be after To date.
-          </p>
         </CardContent>
       </Card>
 
@@ -398,16 +448,14 @@ export default function IncomePage() {
             {areFiltersActive ? (
               <>
                 <p className="text-sm text-zinc-500">
-                  No income entries match your current filters.
+                  {searchQuery.trim()
+                    ? "No income entries match your search."
+                    : "No income entries match your current filters."}
                 </p>
                 <Button
                   variant="outline"
                   className="mt-4"
-                  onClick={() => {
-                    setFilterSourceType("");
-                    setFilterDateFrom("");
-                    setFilterDateTo("");
-                  }}
+                  onClick={handleClearFilters}
                 >
                   Clear filters
                 </Button>
@@ -444,7 +492,11 @@ export default function IncomePage() {
                 </TableHeader>
                 <TableBody>
                   {incomes.map((income) => (
-                    <TableRow key={income.id}>
+                    <TableRow
+                      key={income.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedIncome(income)}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span>{getSourceIcon(income.source_type)}</span>
@@ -464,14 +516,20 @@ export default function IncomePage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(income)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(income);
+                            }}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(income)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(income);
+                            }}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -487,7 +545,11 @@ export default function IncomePage() {
           {/* Mobile Card View */}
           <div className="space-y-3 md:hidden">
             {incomes.map((income) => (
-              <Card key={income.id}>
+              <Card
+                key={income.id}
+                className="cursor-pointer"
+                onClick={() => setSelectedIncome(income)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -520,14 +582,20 @@ export default function IncomePage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEdit(income)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(income);
+                        }}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(income)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(income);
+                        }}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
@@ -735,6 +803,18 @@ export default function IncomePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TransactionDetailModal
+        transaction={selectedIncome}
+        type="income"
+        friendName={
+          selectedIncome?.friend_id
+            ? friends.find((f) => f.id === selectedIncome.friend_id)?.name ?? null
+            : null
+        }
+        open={!!selectedIncome}
+        onOpenChange={(open) => !open && setSelectedIncome(null)}
+      />
     </div>
   );
 }

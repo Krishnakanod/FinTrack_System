@@ -57,6 +57,7 @@ async def create_expense(
 @router.get("/", status_code=status.HTTP_200_OK)
 async def list_expenses(
     category: Optional[str] = None,
+    payment_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     current_user: User = Depends(get_current_user),
@@ -65,6 +66,7 @@ async def list_expenses(
     expenses = await expense_service.list_expenses(
         user_id=str(current_user.id),
         category=category,
+        payment_type=payment_type,
         date_from=date_from,
         date_to=date_to,
     )

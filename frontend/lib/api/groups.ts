@@ -19,6 +19,7 @@ export interface Group {
   name: string;
   description: string | null;
   created_by: string;
+  created_by_name: string;
   members: MemberProfile[];
   created_at: string;
 }
@@ -141,5 +142,31 @@ export async function listGroupTransactions(
 ): Promise<GroupTransactionListResponse> {
   return apiFetch<GroupTransactionListResponse>(
     `/api/v1/groups/groups/${groupId}/transactions`,
+  );
+}
+
+export async function updateGroupTransaction(
+  groupId: string,
+  transactionId: string,
+  data: GroupTransactionCreateInput,
+): Promise<GroupTransaction> {
+  return apiFetch<GroupTransaction>(
+    `/api/v1/groups/groups/${groupId}/transactions/${transactionId}`,
+    {
+      method: "PUT",
+      body: data,
+    },
+  );
+}
+
+export async function deleteGroupTransaction(
+  groupId: string,
+  transactionId: string,
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/groups/groups/${groupId}/transactions/${transactionId}`,
+    {
+      method: "DELETE",
+    },
   );
 }
