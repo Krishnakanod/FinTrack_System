@@ -40,3 +40,4 @@ test-results/
 
 ./claude/settings.json
 ./claude/settings.local.json
+uploads/

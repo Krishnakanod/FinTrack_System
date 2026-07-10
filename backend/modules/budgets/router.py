@@ -11,6 +11,7 @@ from modules.budgets.schemas import (
     BudgetResponse,
     BudgetStatusResponse,
     BudgetListResponse,
+    BudgetHistoryResponse,
 )
 
 router = APIRouter(prefix="/api/v1/budgets", tags=["budgets"])
@@ -32,6 +33,23 @@ async def list_budgets_endpoint(
     return {"items": budgets}
 
 
+@router.get("/status", response_model=list[BudgetStatusResponse])
+async def get_budget_status_endpoint(
+    user: User = Depends(get_current_user),
+):
+    return await service.get_budget_status(str(user.id))
+
+
+# ── /history must be registered before /{budget_id} so FastAPI doesn't
+#    treat the literal string "history" as a budget ID path parameter.
+@router.get("/{budget_id}/history", response_model=BudgetHistoryResponse)
+async def get_budget_history_endpoint(
+    budget_id: str,
+    user: User = Depends(get_current_user),
+):
+    return await service.get_budget_history(str(user.id), budget_id)
+
+
 @router.put("/{budget_id}", response_model=BudgetResponse)
 async def update_budget_endpoint(
     budget_id: str,
@@ -47,10 +65,3 @@ async def delete_budget_endpoint(
     user: User = Depends(get_current_user),
 ):
     await service.delete_budget(str(user.id), budget_id)
-
-
-@router.get("/status", response_model=list[BudgetStatusResponse])
-async def get_budget_status_endpoint(
-    user: User = Depends(get_current_user),
-):
-    return await service.get_budget_status(str(user.id))

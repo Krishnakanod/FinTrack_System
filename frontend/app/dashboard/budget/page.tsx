@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, DollarSign, TrendingUp, PiggyBank } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, TrendingUp, PiggyBank, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,7 @@ import {
   type BudgetStatus,
 } from "@/lib/api/budgets";
 import type { ApiError } from "@/lib/api/client";
+import { BudgetHistorySheet } from "@/components/budgets/budget-history-sheet";
 
 // ===== Form Schemas =====
 
@@ -117,6 +118,7 @@ export default function BudgetPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
+  const [historyBudget, setHistoryBudget] = useState<BudgetStatus | null>(null);
 
   // Fetch budget status (includes spending data)
   const { data: budgetStatusData, isLoading: isBudgetStatusLoading } = useQuery({
@@ -130,7 +132,7 @@ export default function BudgetPage() {
   const createMutation = useMutation({
     mutationFn: createBudget,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-status"] });
+      queryClient.refetchQueries({ queryKey: ["budget-status"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Budget created successfully");
       setIsAddDialogOpen(false);
@@ -168,7 +170,7 @@ export default function BudgetPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteBudget,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-status"] });
+      queryClient.refetchQueries({ queryKey: ["budget-status"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Budget deleted successfully");
       setIsDeleteDialogOpen(false);
@@ -326,13 +328,20 @@ export default function BudgetPage() {
                       </CardDescription>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleEdit(budget)}
                     >
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); setHistoryBudget(budget); }}
+                    >
+                      <History className="h-4 w-4 text-blue-500" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -572,6 +581,18 @@ export default function BudgetPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Budget History Side Sheet */}
+      <BudgetHistorySheet
+        budgetId={historyBudget?.id ?? null}
+        budgetLabel={
+          historyBudget
+            ? `${historyBudget.category} (${historyBudget.period.charAt(0).toUpperCase() + historyBudget.period.slice(1)})`
+            : ""
+        }
+        isOpen={!!historyBudget}
+        onClose={() => setHistoryBudget(null)}
+      />
     </div>
   );
 }

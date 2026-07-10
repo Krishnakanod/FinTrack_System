@@ -12,10 +12,11 @@ from modules.users.models import Friendship
 from modules.notifications.models import Notification
 from modules.groups.models import Group, GroupTransaction, Balance
 from modules.budgets.models import Budget
+from modules.budgets.history_models import BudgetEditLog, BudgetAlertLog
 
 document_models: List[type[BaseModel]] = [
     User, OTP, RefreshToken, Expense, Income, Friendship, Notification,
-    Group, GroupTransaction, Balance, Budget,
+    Group, GroupTransaction, Balance, Budget, BudgetEditLog, BudgetAlertLog,
 ]
 
 motor_client: AsyncIOMotorClient | None = None

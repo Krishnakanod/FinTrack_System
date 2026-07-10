@@ -254,7 +254,7 @@ export default function BalancesPage() {
               ) : (
                 <div className="space-y-2">
                   {youOwe.map((b) => (
-                    <BalanceRow key={b.counterpart_id} balance={b} groupId={selectedGroupId} />
+                    <BalanceRow key={b.counterpart_id} balance={b} groupId={selectedGroupId} groups={groupsData?.items ?? []} />
                   ))}
                 </div>
               )}
@@ -274,7 +274,7 @@ export default function BalancesPage() {
               ) : (
                 <div className="space-y-2">
                   {owedToYou.map((b) => (
-                    <BalanceRow key={b.counterpart_id} balance={b} groupId={selectedGroupId} />
+                    <BalanceRow key={b.counterpart_id} balance={b} groupId={selectedGroupId} groups={groupsData?.items ?? []} />
                   ))}
                 </div>
               )}
@@ -289,9 +289,11 @@ export default function BalancesPage() {
 function BalanceRow({
   balance,
   groupId,
+  groups,
 }: {
   balance: ComputedGroupBalance | Balance;
   groupId: string;
+  groups: Group[];
 }) {
   const isYouOwe = balance.direction === "you_owe";
   const [isOpen, setIsOpen] = useState(false);
@@ -407,11 +409,20 @@ function BalanceRow({
                       >
                         <div>
                           <p className="text-sm font-medium">{t.description}</p>
-                          <p className="text-xs text-zinc-500">
-                            {new Date(t.date).toLocaleDateString()}
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-zinc-500">
+                            <span>{new Date(t.date).toLocaleDateString()}</span>
+                            <span>•</span>
+                            <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                              {groups.find(g => g.id === t.group_id)?.name ?? "Unknown Group"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Paid by: <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                              {t.paid_by === currentUser?.id ? "You" : (groups.find(g => g.id === t.group_id)?.members.find(m => m.id === t.paid_by)?.name ?? "Unknown")}
+                            </span>
                           </p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right mt-1">
                           <p
                             className={cn(
                               "text-sm font-bold",

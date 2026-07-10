@@ -149,7 +149,7 @@ export function Header() {
     <>
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-6 dark:border-zinc-800 dark:bg-zinc-950">
       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-        Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+        Welcome back{user?.name ? `, ${user.name}` : ""}
       </h2>
       <div className="flex items-center gap-4">
         {/* Notification Bell */}
@@ -236,8 +236,12 @@ export function Header() {
 
         {/* User Profile */}
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <User className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="Avatar" className="h-full w-full object-cover object-center" />
+            ) : (
+              <User className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
+            )}
           </div>
           <span className="hidden text-sm font-medium text-zinc-900 sm:inline dark:text-zinc-50">
             {user?.name || user?.email || "User"}

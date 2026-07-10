@@ -105,3 +105,49 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "Utilities",
   "Other",
 ];
+
+// ===== Budget History Types =====
+
+export interface EditChange {
+  field: string;
+  old_value: string;
+  new_value: string;
+}
+
+export interface EditLogItem {
+  changed_at: string;
+  changes: EditChange[];
+}
+
+export interface AlertLogItem {
+  threshold: "80" | "100";
+  spend_at_alert: number;
+  budget_amount: number;
+  fired_at: string;
+}
+
+export interface DailySpend {
+  date: string;    // YYYY-MM-DD
+  amount: number;
+}
+
+export interface PastPeriodSummary {
+  period_anchor: string;
+  spent: number;
+  budget_amount: number;
+  daily_breakdown: DailySpend[];
+}
+
+export interface BudgetHistoryResponse {
+  budget_id: string;
+  created_at: string;
+  updated_at: string;
+  edit_logs: EditLogItem[];
+  alert_logs: AlertLogItem[];
+  daily_spending: DailySpend[];
+  past_periods: PastPeriodSummary[];
+}
+
+export async function getBudgetHistory(id: string): Promise<BudgetHistoryResponse> {
+  return apiFetch<BudgetHistoryResponse>(`/api/v1/budgets/${id}/history`);
+}

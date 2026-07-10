@@ -2,6 +2,9 @@
 
 from datetime import datetime, timezone
 from typing import Optional
+import os
+import time
+from fastapi import UploadFile
 
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
@@ -73,6 +76,43 @@ async def update_profile(
     if update_data:
         user.updated_at = datetime.now(timezone.utc)
         await user.save()
+
+    return UserProfileResponse(
+        id=str(user.id),
+        email=user.email,
+        username=user.username,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        upi_id=user.upi_id,
+    )
+
+
+async def upload_avatar(user_id: str, file: UploadFile, request_url: str) -> Optional[UserProfileResponse]:
+    """Upload a user's avatar image."""
+    user = await User.get(PydanticObjectId(user_id))
+    if not user:
+        return None
+
+    uploads_dir = "uploads"
+    if not os.path.exists(uploads_dir):
+        os.makedirs(uploads_dir)
+
+    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "png"
+    filename = f"user_{user_id}_{int(time.time())}.{ext}"
+    filepath = os.path.join(uploads_dir, filename)
+
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    from urllib.parse import urlparse
+    parsed = urlparse(request_url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    avatar_url = f"{base_url}/uploads/{filename}"
+
+    user.avatar_url = avatar_url
+    user.updated_at = datetime.now(timezone.utc)
+    await user.save()
 
     return UserProfileResponse(
         id=str(user.id),

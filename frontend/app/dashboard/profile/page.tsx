@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { User, Pencil, Check, X } from "lucide-react";
@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { updateProfile, getProfile } from "@/lib/api/users";
+import { updateProfile, getProfile, uploadAvatar } from "@/lib/api/users";
 import type { ApiError } from "@/lib/api/client";
 
 export default function ProfilePage() {
@@ -33,8 +33,39 @@ export default function ProfilePage() {
   const [isEditingUpi, setIsEditingUpi] = useState(false);
   const [editedUpi, setEditedUpi] = useState(user?.upi_id ?? "");
 
-  const [isEditingAvatar, setIsEditingAvatar] = useState(false);
-  const [editedAvatar, setEditedAvatar] = useState(user?.avatar_url ?? "");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadAvatar(file),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      if (accessToken) {
+        setAuth(accessToken, {
+          id: data.id,
+          email: data.email,
+          username: data.username,
+          name: data.name,
+          avatar_url: data.avatar_url,
+          upi_id: data.upi_id,
+        });
+      }
+      toast.success("Avatar uploaded successfully");
+      setIsUploadingAvatar(false);
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.message || "Failed to upload avatar");
+      setIsUploadingAvatar(false);
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploadingAvatar(true);
+      uploadMutation.mutate(file);
+    }
+  };
 
   const updateMutation = useMutation({
     mutationFn: (data: { username?: string; name?: string; upi_id?: string; avatar_url?: string }) => updateProfile(data),
@@ -54,7 +85,6 @@ export default function ProfilePage() {
       setIsEditingUsername(false);
       setIsEditingName(false);
       setIsEditingUpi(false);
-      setIsEditingAvatar(false);
     },
     onError: (error: ApiError) => {
       toast.error(error.message || "Failed to update profile");
@@ -96,15 +126,6 @@ export default function ProfilePage() {
     updateMutation.mutate({ upi_id: trimmed });
   }
 
-  function handleSaveAvatar() {
-    const trimmed = editedAvatar.trim();
-    if (trimmed === (user?.avatar_url ?? "")) {
-      setIsEditingAvatar(false);
-      return;
-    }
-    updateMutation.mutate({ avatar_url: trimmed });
-  }
-
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -128,40 +149,30 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 text-2xl font-medium dark:bg-zinc-800 overflow-hidden">
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-zinc-100 text-3xl font-medium dark:bg-zinc-800 overflow-hidden border border-zinc-200 dark:border-zinc-700">
               {user?.avatar_url ? (
-                <img src={user.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
+                <img src={user.avatar_url} alt="Avatar" className="h-full w-full object-cover object-center" />
               ) : (
-                user?.name.charAt(0).toUpperCase()
+                user?.name?.charAt(0).toUpperCase() || "U"
               )}
             </div>
-            {isEditingAvatar ? (
-              <div className="flex items-center gap-2 flex-1">
-                <Input
-                  value={editedAvatar}
-                  onChange={(e) => setEditedAvatar(e.target.value)}
-                  placeholder="Enter avatar URL"
-                  className="max-w-sm"
-                />
-                <Button size="sm" onClick={handleSaveAvatar} disabled={updateMutation.isPending}>
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setIsEditingAvatar(false);
-                    setEditedAvatar(user?.avatar_url ?? "");
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setIsEditingAvatar(true)}>
-                Change Avatar
+            <div>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="hidden" 
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+              >
+                {isUploadingAvatar ? "Uploading..." : "Upload Avatar"}
               </Button>
-            )}
+            </div>
           </div>
 
           <div>

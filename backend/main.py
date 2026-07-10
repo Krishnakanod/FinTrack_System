@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
@@ -34,6 +36,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS middleware
 # When allow_credentials=True, browsers require the response to echo back the

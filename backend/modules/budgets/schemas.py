@@ -40,3 +40,53 @@ class BudgetStatusResponse(BudgetResponse):
 
 class BudgetListResponse(BaseModel):
     items: list[BudgetResponse]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Budget History schemas
+# ──────────────────────────────────────────────────────────────────────────────
+
+class EditChange(BaseModel):
+    """One field that changed in a single edit event."""
+    field: str
+    old_value: str
+    new_value: str
+
+
+class EditLogItem(BaseModel):
+    """One edit event (may bundle multiple field changes)."""
+    changed_at: str          # ISO datetime
+    changes: list[EditChange]
+
+
+class AlertLogItem(BaseModel):
+    """One threshold alert that was fired by the scheduler."""
+    threshold: str           # "80" | "100"
+    spend_at_alert: float
+    budget_amount: float
+    fired_at: str            # ISO datetime
+
+
+class DailySpend(BaseModel):
+    """Total expenses for one calendar date in the current period."""
+    date: str                # YYYY-MM-DD
+    amount: float
+
+
+class PastPeriodSummary(BaseModel):
+    """Spending summary for one prior budget period."""
+    period_anchor: str       # e.g. "2026-06", "2026-Q1", "2026"
+    spent: float
+    budget_amount: float     # budget limit that was active during this period
+                             # (always current amount — edit history not back-filled)
+    daily_breakdown: list[DailySpend] = []  # per-day totals within this past period
+
+
+class BudgetHistoryResponse(BaseModel):
+    budget_id: str
+    created_at: str
+    updated_at: str
+    edit_logs: list[EditLogItem]
+    alert_logs: list[AlertLogItem]
+    daily_spending: list[DailySpend]        # current period, sorted date asc
+    past_periods: list[PastPeriodSummary]   # up to 5 prior periods, newest first

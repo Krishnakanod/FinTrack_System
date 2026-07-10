@@ -49,17 +49,19 @@ async function apiFetch<T = unknown>(
 ): Promise<T> {
   const { method = "GET", body, headers = {}, _skipRefresh = false } = options;
 
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+
   const config: RequestInit = {
     method,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...headers,
     },
     credentials: "include", // required for refresh_token httpOnly cookie
   };
 
   if (body) {
-    config.body = JSON.stringify(body);
+    config.body = isFormData ? (body as FormData) : JSON.stringify(body);
   }
 
   // Attach Bearer token for non-public endpoints.

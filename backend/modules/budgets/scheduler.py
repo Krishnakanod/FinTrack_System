@@ -11,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.config import settings
 from core.email import send_email
 from modules.budgets.models import Budget
+from modules.budgets.history_models import BudgetAlertLog
 from modules.budgets.service import get_current_spend
 from modules.notifications.service import create_notification
 from shared.period_utils import get_period_anchor, now_in_ist, decimal_to_float
@@ -112,6 +113,17 @@ async def _send_budget_alert(budget: Budget, current_spend: Decimal, threshold: 
         metadata=metadata,
         category="budget",
     )
+
+    # Persist alert log for history
+    alert_log = BudgetAlertLog(
+        budget_id=str(budget.id),
+        user_id=str(budget.user_id),
+        threshold=threshold,
+        spend_at_alert=decimal_to_float(current_spend),
+        budget_amount=decimal_to_float(amount),
+        fired_at=now_in_ist(),
+    )
+    await alert_log.insert()
 
     # Email alert
     user = await User.get(budget.user_id)

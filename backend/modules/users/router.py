@@ -3,7 +3,7 @@
 Locked contracts per Spec-06 §1.2.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request
 
 from core.deps import get_current_user
 from modules.auth.models import User
@@ -56,6 +56,30 @@ async def update_my_profile(
         username=data.username,
         avatar_url=data.avatar_url,
         upi_id=data.upi_id,
+    )
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "NOT_FOUND",
+                "message": "User not found.",
+                "details": {},
+            },
+        )
+    return profile
+
+
+@router.post("/me/avatar", status_code=status.HTTP_200_OK)
+async def upload_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> UserProfileResponse:
+    """Upload own avatar."""
+    profile = await users_service.upload_avatar(
+        user_id=str(current_user.id),
+        file=file,
+        request_url=str(request.url),
     )
     if not profile:
         raise HTTPException(

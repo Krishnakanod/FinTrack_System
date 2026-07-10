@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
+import pymongo
 from beanie import Document, Indexed
 from bson.decimal128 import Decimal128
 from pydantic import field_validator
